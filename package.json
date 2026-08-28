@@ -1,11 +1,18 @@
 {
   "name": "marketing-tool",
   "version": "1.0.0",
-  "description": "Winning Heaven VIP Email Marketing & Deep Verifier Dashboard",
+  "description": "Winning Heaven Email Marketing & Lead Verifier Tool",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "build": "pip3 install -r requirements.txt || true"
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "nodemailer": "^6.9.14",
+    "xlsx": "^0.18.5"
+  },
+  "engines": {
+    "node": ">=16.0.0"
   },
   "keywords": ["email", "marketing", "verifier"],
   "author": "Winning Heaven",
