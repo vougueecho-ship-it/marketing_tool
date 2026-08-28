@@ -4,6 +4,7 @@
   "description": "Winning Heaven Email Marketing & Lead Verifier Tool",
   "main": "server.js",
   "scripts": {
+    "build": "echo 'Build complete. Ready to deploy.'",
     "start": "node server.js"
   },
   "dependencies": {
@@ -14,7 +15,11 @@
   "engines": {
     "node": ">=16.0.0"
   },
-  "keywords": ["email", "marketing", "verifier"],
+  "keywords": [
+    "email",
+    "marketing",
+    "verifier"
+  ],
   "author": "Winning Heaven",
   "license": "ISC"
 }
