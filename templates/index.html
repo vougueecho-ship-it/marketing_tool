@@ -1,0 +1,1131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Winning Heaven • Multi-List Email Marketing & Drip Funnel</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="/static/css/style.css?v={{ v }}">
+</head>
+<body>
+
+  <!-- TOP HEADER -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="brand">
+        <div class="brand-badge"><i class="fa-solid fa-crown"></i></div>
+        <div class="brand-text">
+          <h1>WINNING HEAVEN</h1>
+          <span class="subtext">Multi-File VIP Email Marketing &amp; 3-Stage Drip Funnel</span>
+        </div>
+      </div>
+
+      <div class="header-status">
+        <div class="file-selector-quick">
+          <label><i class="fa-solid fa-file-excel text-gold"></i> Target List:</label>
+          <select id="quick-file-select" class="form-select-sm"></select>
+        </div>
+        <div class="status-pill connected">
+          <span class="status-dot"></span>
+          <span>verified@winningheaven.com</span>
+        </div>
+        <a href="https://winningheaven.com" target="_blank" class="btn-link">
+          <i class="fa-solid fa-arrow-up-right-from-square"></i> Visit Site
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <main class="main-layout">
+    
+    <!-- STATS SUMMARY CARDS -->
+    <section class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-icon total"><i class="fa-solid fa-users"></i></div>
+        <div class="stat-info">
+          <span class="stat-label">Target List Leads</span>
+          <span class="stat-value" id="stat-total">1,177</span>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon sent"><i class="fa-solid fa-paper-plane"></i></div>
+        <div class="stat-info">
+          <span class="stat-label">Delivered (Sent)</span>
+          <span class="stat-value text-gold" id="stat-sent">0</span>
+        </div>
+      </div>
+
+      <div class="stat-card highlight-card">
+        <div class="stat-icon clicks"><i class="fa-solid fa-arrow-pointer"></i></div>
+        <div class="stat-info">
+          <span class="stat-label">Total Website Clicks</span>
+          <span class="stat-value text-gold-glow" id="stat-total-clicks">0</span>
+        </div>
+      </div>
+
+      <div class="stat-card highlight-card">
+        <div class="stat-icon engaged"><i class="fa-solid fa-fire"></i></div>
+        <div class="stat-info">
+          <span class="stat-label">Engaged Hot Leads</span>
+          <span class="stat-value text-success" id="stat-unique-clicks">0</span>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon pending"><i class="fa-solid fa-clock"></i></div>
+        <div class="stat-info">
+          <span class="stat-label">Remaining in Queue</span>
+          <span class="stat-value" id="stat-pending">1,177</span>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon" style="background: rgba(59, 130, 246, 0.15); color: #60a5fa;"><i class="fa-solid fa-gauge-high"></i></div>
+        <div class="stat-info" style="flex: 1;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span class="stat-label">Today's Sent (Cap)</span>
+            <button id="btn-open-limit-modal" class="btn-xs-gold" type="button" title="Extend or adjust daily sending limit">
+              <i class="fa-solid fa-pen-to-square"></i> Change
+            </button>
+          </div>
+          <span class="stat-value" style="color: #60a5fa;"><span id="stat-today-sent">0</span> / <span id="stat-daily-limit">850</span></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- CAMPAIGN PROGRESS BAR & LIVE STATUS -->
+    <section class="progress-section card">
+      <div class="progress-header">
+        <div class="campaign-state">
+          <span id="campaign-badge" class="badge badge-idle"><i class="fa-solid fa-circle"></i> IDLE / READY</span>
+          <span class="active-file-indicator">Target File: <strong id="active-file-label" class="text-gold">client sheet.xlsx</strong></span>
+          <span id="sending-indicator" class="sending-text" style="display:none;">
+            <i class="fa-solid fa-spinner fa-spin"></i> Dispatching to: <code id="current-sending-email">...</code>
+          </span>
+        </div>
+        <div class="progress-pct" id="progress-percentage">0%</div>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill" id="progress-bar-fill" style="width: 0%;"></div>
+      </div>
+    </section>
+
+    <!-- NAVIGATION TABS -->
+    <nav class="nav-tabs">
+      <button class="tab-btn active" data-tab="tab-control"><i class="fa-solid fa-rocket text-gold"></i> 🚀 Campaign Control</button>
+      <button class="tab-btn" data-tab="tab-cleaner" style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(239, 68, 68, 0.2)); border-color: rgba(245, 158, 11, 0.4);"><i class="fa-solid fa-broom text-gold"></i> 🧹 Smart Lead Cleaner</button>
+      <button class="tab-btn" data-tab="tab-senders"><i class="fa-solid fa-at text-gold"></i> Sender Emails &amp; Rotation (<span id="tab-senders-count">1</span>)</button>
+      <button class="tab-btn" data-tab="tab-files"><i class="fa-solid fa-folder-open text-gold"></i> Lead Files &amp; Lists (<span id="tab-files-count">1</span>)</button>
+      <button class="tab-btn" data-tab="tab-templates"><i class="fa-solid fa-layer-group"></i> 3-Stage Drip Templates</button>
+      <button class="tab-btn" data-tab="tab-recipients"><i class="fa-solid fa-list-check"></i> Recipients (<span id="tab-rec-count">1,177</span>)</button>
+      <button class="tab-btn" data-tab="tab-clicks"><i class="fa-solid fa-fire"></i> Engaged Clicks (<span id="tab-clicks-count">0</span>)</button>
+      <button class="tab-btn" data-tab="tab-settings"><i class="fa-solid fa-sliders"></i> Settings</button>
+      <button class="tab-btn" data-tab="tab-logs"><i class="fa-solid fa-terminal"></i> Live Logs</button>
+    </nav>
+
+    <!-- TAB 1: CAMPAIGN CONTROL -->
+    <div id="tab-control" class="tab-pane active">
+      <div class="control-grid">
+        
+        <!-- Left: Quick Actions & Test Sender -->
+        <div class="card">
+          <div class="card-title">
+            <i class="fa-solid fa-circle-play text-gold"></i>
+            <h2>1-Click Campaign Dispatcher</h2>
+          </div>
+          
+          <div class="current-target-box">
+            <div>
+              <span class="target-title">Targeting Lead File:</span>
+              <h3 id="ctrl-target-filename" class="text-gold">client sheet.xlsx</h3>
+            </div>
+            <button id="btn-switch-file-quick" class="btn btn-sm btn-outline">
+              <i class="fa-solid fa-exchange-alt"></i> Change File
+            </button>
+          </div>
+
+          <div class="action-buttons-group" style="margin-top: 18px;">
+            <button id="btn-start" class="btn btn-primary btn-lg">
+              <i class="fa-solid fa-play"></i> Start Campaign on Selected File
+            </button>
+            <button id="btn-pause" class="btn btn-warning" disabled>
+              <i class="fa-solid fa-pause"></i> Pause
+            </button>
+            <button id="btn-stop" class="btn btn-danger" disabled>
+              <i class="fa-solid fa-stop"></i> Stop
+            </button>
+            <button id="btn-reset" class="btn btn-outline">
+              <i class="fa-solid fa-rotate-left"></i> Reset File Queue
+            </button>
+          </div>
+
+          <hr class="divider">
+
+          <div class="card-title">
+            <i class="fa-solid fa-vial text-gold"></i>
+            <h3>Send Test Email (Verify Inbox &amp; Template)</h3>
+          </div>
+          <p class="card-desc">Send 1 test copy to your personal email to verify delivery before launching to the whole list.</p>
+          
+          <div class="input-group">
+            <label>Test Recipient Email:</label>
+            <div class="flex-row">
+              <input type="email" id="test-email-input" placeholder="e.g. yourname@gmail.com" class="form-input">
+              <button id="btn-send-test" class="btn btn-secondary">
+                <i class="fa-solid fa-paper-plane"></i> Send Test
+              </button>
+            </div>
+          </div>
+          <div id="test-result-msg" class="alert-box" style="display:none;"></div>
+        </div>
+
+        <!-- Right: Selected Campaign Overview -->
+        <div class="card">
+          <div class="card-title">
+            <i class="fa-solid fa-bullhorn text-gold"></i>
+            <h2>Active Drip Stage &amp; Message</h2>
+          </div>
+
+          <div class="form-group">
+            <label>Select Drip Sequence Stage to Send:</label>
+            <select id="template-selector-control" class="form-select"></select>
+          </div>
+
+          <div class="form-group">
+            <label style="color: #fbbf24; font-weight: 700;"><i class="fa-solid fa-at text-gold"></i> Choose Sender Email Account:</label>
+            <select id="ctrl-sender-account-select" class="form-select"></select>
+          </div>
+
+          <div class="form-group">
+            <label>Sender Display Name:</label>
+            <input type="text" id="ctrl-sender-name" class="form-input" value="Winning Heaven VIP">
+          </div>
+
+          <div class="form-group">
+            <label>Email Subject:</label>
+            <input type="text" id="ctrl-subject" class="form-input">
+          </div>
+
+          <div class="anti-spam-alert">
+            <i class="fa-solid fa-shield-halved text-gold"></i>
+            <div>
+              <strong>Spam-Shield &amp; Direct Link Active:</strong>
+              <p>All links route safely to <code>https://winningheaven.com/?utm_source=email_campaign&amp;lead={email}</code> with human-like delays (3-6s) to ensure 100% inbox delivery.</p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- TAB 2: LEAD FILES & LISTS MANAGER -->
+    <div id="tab-files" class="tab-pane">
+      <div class="files-grid">
+        
+        <!-- Upload Card -->
+        <div class="card">
+          <div class="card-title">
+            <i class="fa-solid fa-cloud-arrow-up text-gold"></i>
+            <h2>Upload New Lead File</h2>
+          </div>
+          <p class="card-desc">
+            Upload any Excel (<code>.xlsx</code>, <code>.xls</code>) or CSV (<code>.csv</code>) file with client emails. The software will automatically clean and deduplicate all emails.
+          </p>
+
+          <form id="upload-form" class="upload-dropzone">
+            <i class="fa-solid fa-file-excel upload-icon"></i>
+            <p>Drag and drop your Excel or CSV file here, or click to browse</p>
+            <input type="file" id="file-input" accept=".xlsx,.xls,.csv,.txt" style="display:none;">
+            <button type="button" id="btn-browse-file" class="btn btn-secondary" style="margin-top: 12px;">
+              <i class="fa-solid fa-folder-open"></i> Browse Computer
+            </button>
+            <div id="selected-file-name" class="selected-file-text"></div>
+            <button type="submit" id="btn-upload-submit" class="btn btn-primary" style="margin-top: 14px; display:none;">
+              <i class="fa-solid fa-arrow-up-from-bracket"></i> Upload &amp; Load Leads
+            </button>
+          </form>
+          <div id="upload-status-msg" class="alert-box" style="display:none;"></div>
+        </div>
+
+        <!-- Files List Card -->
+        <div class="card">
+          <div class="card-title" style="justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <i class="fa-solid fa-folder-tree text-gold"></i>
+              <h2>Available Lead Files &amp; Lists</h2>
+            </div>
+            <div class="queue-toolbar-actions" style="display: flex; gap: 8px; align-items: center;">
+              <button id="btn-set-queue" class="btn btn-sm btn-secondary" title="Queue checked files to run sequentially one after another">
+                <i class="fa-solid fa-list-check"></i> Queue Selected Lists
+              </button>
+              <button id="btn-clear-queue" class="btn btn-sm btn-outline" style="display:none;">
+                <i class="fa-solid fa-xmark"></i> Clear Queue
+              </button>
+            </div>
+          </div>
+          <p class="card-desc">Select a single list to target, or check multiple files and click "Queue Selected Lists" to auto-run them one after another!</p>
+
+          <div id="queue-banner" class="anti-spam-alert" style="display:none; margin-bottom: 15px; background: rgba(245, 158, 11, 0.1); border-color: #f59e0b;">
+            <i class="fa-solid fa-layer-group text-gold"></i>
+            <div style="flex: 1;">
+              <strong>Multi-List Queue Active:</strong>
+              <p id="queue-sequence-display" style="margin: 4px 0 0; color: #fbbf24; font-weight: 600;">None</p>
+            </div>
+          </div>
+
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th width="40"><input type="checkbox" id="chk-select-all-files" title="Select All Files"></th>
+                  <th>File Name</th>
+                  <th width="100">Total Leads</th>
+                  <th width="80">Sent</th>
+                  <th width="80">Pending</th>
+                  <th width="180">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="files-table-body">
+                <tr><td colspan="6" class="text-center">Loading files...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- TAB: SMART LEAD CLEANER & DEDUPLICATOR -->
+    <!-- TAB 2: SMART LEAD CLEANER & DEEP EMAIL VERIFIER -->
+    <div id="tab-cleaner" class="tab-pane">
+      
+      <!-- TOP CARD: 1-CLICK DEEP EMAIL VERIFIER & LIST SCRUBBER -->
+      <div class="card" style="background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(17, 24, 39, 0.95)); border: 1px solid rgba(34, 197, 94, 0.35); box-shadow: 0 10px 30px rgba(0,0,0,0.3); margin-bottom: 24px;">
+        <div class="card-title" style="justify-content: space-between; flex-wrap: wrap;">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <div style="background: linear-gradient(135deg, #22c55e, #16a34a); width: 44px; height: 44px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 22px; box-shadow: 0 4px 14px rgba(34,197,94,0.35);">
+              <i class="fa-solid fa-shield-check"></i>
+            </div>
+            <div>
+              <h2 style="margin: 0; color: #fff; font-size: 19px;">⚡ Deep Email Verifier &amp; Dead Mailbox Cleaner</h2>
+              <p class="card-desc" style="margin: 2px 0 0; font-size: 13px; color: #86efac;">
+                Scan lists for Dead accounts, Spam Traps, Disposable emails &amp; Typo domains without sending a single email. 100% Free &amp; Unlimited.
+              </p>
+            </div>
+          </div>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <span class="badge" style="background: rgba(34, 197, 94, 0.15); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.3); padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 700;">
+              <i class="fa-solid fa-circle-check"></i> 6-Tier Inspection Active
+            </span>
+          </div>
+        </div>
+
+        <div style="margin-top: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+          <!-- Left: Verification Controls -->
+          <div style="background: rgba(0,0,0,0.25); padding: 18px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.08);">
+            <div class="form-group" style="margin-bottom: 14px;">
+              <label style="color: #fbbf24; font-weight: 700; font-size: 13px; margin-bottom: 6px; display: block;">
+                <i class="fa-solid fa-folder-open text-gold"></i> Select Lead File to Verify:
+              </label>
+              <select id="verifier-file-select" class="form-select" style="background: #0f172a; border-color: rgba(255,255,255,0.15); color: #fff;"></select>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 16px;">
+              <label style="color: #94a3b8; font-weight: 600; font-size: 12px; margin-bottom: 6px; display: block;">
+                <i class="fa-solid fa-microchip"></i> Verification Engine:
+              </label>
+              <select id="verifier-engine-select" class="form-select" style="background: #0f172a; border-color: rgba(255,255,255,0.15); color: #fff;">
+                <option value="native" selected>⚡ Native Deep Verifier (100% Free &amp; Unlimited — Local MX + Handshake)</option>
+                <option value="verifalia">🌐 Verifalia Cloud API Integration (25 Free Daily Credits)</option>
+              </select>
+            </div>
+
+            <div style="display: flex; gap: 10px;">
+              <button id="btn-start-verify" class="btn btn-primary" style="flex: 1; justify-content: center; background: linear-gradient(135deg, #22c55e, #16a34a); border: 0; box-shadow: 0 4px 15px rgba(34, 197, 94, 0.35); font-weight: 700;">
+                <i class="fa-solid fa-play"></i> Run Deep Verification
+              </button>
+            </div>
+
+            <!-- Single Email Ping Test Box -->
+            <div style="margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.1);">
+              <label style="color: #cbd5e1; font-size: 12px; font-weight: 600; display: block; margin-bottom: 6px;">
+                <i class="fa-solid fa-magnifying-glass"></i> Quick Single Email Ping Check:
+              </label>
+              <div style="display: flex; gap: 8px;">
+                <input type="email" id="verifier-single-input" class="form-input" placeholder="e.g. test@gmail.com" style="flex: 1; font-size: 13px;">
+                <button id="btn-verify-single" class="btn btn-secondary" style="font-size: 12px; padding: 8px 14px;">
+                  <i class="fa-solid fa-bolt"></i> Test
+                </button>
+              </div>
+              <div id="verifier-single-result" style="margin-top: 8px; font-size: 12px; display: none;"></div>
+            </div>
+          </div>
+
+          <!-- Right: Live Progress & Stat Badges -->
+          <div style="background: rgba(0,0,0,0.25); padding: 18px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.08); display: flex; flex-direction: column; justify-content: space-between;">
+            <div>
+              <!-- Progress Bar -->
+              <div style="margin-bottom: 14px;">
+                <div style="display: flex; justify-content: space-between; font-size: 13px; font-weight: 700; color: #fff; margin-bottom: 6px;">
+                  <span id="verifier-status-label"><i class="fa-solid fa-circle-notch fa-spin text-gold" style="display:none;" id="verifier-spinner"></i> Status: Ready</span>
+                  <span id="verifier-progress-percent" style="color: #4ade80;">0%</span>
+                </div>
+                <div style="background: rgba(255,255,255,0.1); height: 10px; border-radius: 5px; overflow: hidden;">
+                  <div id="verifier-progress-bar" style="background: linear-gradient(90deg, #22c55e, #3b82f6); width: 0%; height: 100%; transition: width 0.3s ease;"></div>
+                </div>
+                <div id="verifier-current-scanning" style="font-size: 11px; color: #94a3b8; margin-top: 4px; font-family: monospace; height: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                  Waiting to start...
+                </div>
+              </div>
+
+              <!-- Stat Badges Grid -->
+              <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px;">
+                <div style="background: rgba(34, 197, 94, 0.12); padding: 10px 8px; border-radius: 8px; text-align: center; border: 1px solid rgba(34, 197, 94, 0.3);">
+                  <div style="font-size: 11px; color: #86efac;">🟢 Deliverable</div>
+                  <div id="verifier-stat-deliverable" style="font-size: 18px; font-weight: 800; color: #22c55e;">0</div>
+                </div>
+                <div style="background: rgba(239, 68, 68, 0.12); padding: 10px 8px; border-radius: 8px; text-align: center; border: 1px solid rgba(239, 68, 68, 0.3);">
+                  <div style="font-size: 11px; color: #fca5a5;">🔴 Dead / Invalid</div>
+                  <div id="verifier-stat-dead" style="font-size: 18px; font-weight: 800; color: #ef4444;">0</div>
+                </div>
+                <div style="background: rgba(245, 158, 11, 0.12); padding: 10px 8px; border-radius: 8px; text-align: center; border: 1px solid rgba(245, 158, 11, 0.3);">
+                  <div style="font-size: 11px; color: #fcd34d;">⚠️ Risky / Traps</div>
+                  <div id="verifier-stat-risky" style="font-size: 18px; font-weight: 800; color: #f59e0b;">0</div>
+                </div>
+              </div>
+              <!-- Detailed Inspection Results Table -->
+              <div id="verifier-detail-container" style="display: none; margin-top: 14px; background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 12px;">
+                <div style="display: flex; gap: 6px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; margin-bottom: 10px;">
+                  <button type="button" id="vtab-btn-dead" class="btn btn-secondary btn-sm verifier-tab-btn active" data-vtab="dead" style="font-size: 11px; padding: 5px 10px; background: rgba(239, 68, 68, 0.25); border-color: rgba(239,68,68,0.5); color: #fca5a5; font-weight: 700;">
+                    🔴 Dead Emails (<span id="vtab-dead-count">0</span>)
+                  </button>
+                  <button type="button" id="vtab-btn-risky" class="btn btn-secondary btn-sm verifier-tab-btn" data-vtab="risky" style="font-size: 11px; padding: 5px 10px; color: #fcd34d; font-weight: 600;">
+                    ⚠️ Risky / Traps (<span id="vtab-risky-count">0</span>)
+                  </button>
+                  <button type="button" id="vtab-btn-deliverable" class="btn btn-secondary btn-sm verifier-tab-btn" data-vtab="deliverable" style="font-size: 11px; padding: 5px 10px; color: #86efac; font-weight: 600;">
+                    🟢 Deliverable Sample (<span id="vtab-deliverable-count">0</span>)
+                  </button>
+                </div>
+
+                <!-- List View Scrollbox -->
+                <div id="verifier-detail-list" style="max-height: 140px; overflow-y: auto; font-family: monospace; font-size: 11px; color: #cbd5e1;">
+                  <div style="color: #94a3b8; text-align: center; padding: 10px;">Inspection details will appear here after scanning.</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Apply & Auto-Clean Actions -->
+            <div id="verifier-actions-box" style="display: none; margin-top: 12px; gap: 10px; flex-wrap: wrap;">
+              <button id="btn-apply-verifier-clean" class="btn btn-primary" style="flex: 1; justify-content: center; background: linear-gradient(135deg, #0284c7, #0369a1); border: 0; box-shadow: 0 4px 14px rgba(2,132,199,0.35); font-weight: 700; padding: 10px;">
+                <i class="fa-solid fa-trash-can"></i> 1-Click Purge Dead Emails &amp; Sync Campaign
+              </button>
+              <a id="btn-download-dead-csv" href="/api/verifier/export-dead" class="btn btn-secondary" style="display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 10px 14px; background: rgba(239, 68, 68, 0.2); border-color: rgba(239,68,68,0.4); color: #fca5a5; font-weight: 700; text-decoration: none;" title="Download report of dead emails">
+                <i class="fa-solid fa-file-csv"></i> Download Dead CSV
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- BOTTOM CARD: RAW TEXT EXTRACTOR & DEDUPLICATOR -->
+      <div class="card" style="background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 27, 75, 0.9)); border: 1px solid rgba(245, 158, 11, 0.4); box-shadow: 0 10px 30px rgba(0,0,0,0.3);">
+        <div class="card-title" style="justify-content: space-between; flex-wrap: wrap;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="background: linear-gradient(135deg, #f59e0b, #ef4444); width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 20px;">
+              <i class="fa-solid fa-broom"></i>
+            </div>
+            <div>
+              <h2 style="margin: 0; color: #fff; font-size: 18px;">Raw Email Text Cleaner &amp; Deduplicator</h2>
+              <p class="card-desc" style="margin: 0; font-size: 13px; color: #fbbf24;">Paste raw messy text from WhatsApp, Excel, or chat to extract and clean emails automatically.</p>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+          <!-- Left: Input Area -->
+          <div>
+            <label style="font-size: 14px; font-weight: 700; color: var(--gold-bright); margin-bottom: 8px; display: block;">
+              <i class="fa-solid fa-paste"></i> Paste Raw Messy Emails Here:
+            </label>
+            <textarea id="cleaner-raw-input" class="form-textarea" rows="10" placeholder="Paste your raw emails here (e.g. smartixezadriana@gmail.com, bairboys01@yahoo.com, Email is test@gmail.com, etc.)..."></textarea>
+            
+            <div style="margin-top: 14px; display: flex; gap: 10px; align-items: center;">
+              <button id="btn-clean-filter" class="btn btn-primary" style="flex: 1; justify-content: center; background: linear-gradient(135deg, #f59e0b, #d97706); border: 0; box-shadow: 0 4px 15px rgba(245, 158, 11, 0.3);">
+                <i class="fa-solid fa-wand-magic-sparkles"></i> 1-Click Clean &amp; Deduplicate
+              </button>
+              <button id="btn-cleaner-clear" class="btn btn-outline" type="button">
+                <i class="fa-solid fa-eraser"></i> Clear
+              </button>
+            </div>
+          </div>
+
+          <!-- Right: Live Results & Save/Merge Controls -->
+          <div>
+            <div id="cleaner-results-box" style="display:none;">
+              <!-- Stat Cards Grid -->
+              <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px;">
+                <div style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; text-align: center; border: 1px solid rgba(255,255,255,0.1);">
+                  <div style="font-size: 11px; color: #94a3b8;">Raw Matches</div>
+                  <div id="cleaner-stat-raw" style="font-size: 20px; font-weight: 800; color: #fff;">0</div>
+                </div>
+                <div style="background: rgba(239, 68, 68, 0.1); padding: 12px; border-radius: 8px; text-align: center; border: 1px solid rgba(239, 68, 68, 0.3);">
+                  <div style="font-size: 11px; color: #fca5a5;">Duplicates</div>
+                  <div id="cleaner-stat-dup" style="font-size: 20px; font-weight: 800; color: #ef4444;">0</div>
+                </div>
+                <div style="background: rgba(34, 197, 94, 0.1); padding: 12px; border-radius: 8px; text-align: center; border: 1px solid rgba(34, 197, 94, 0.3);">
+                  <div style="font-size: 11px; color: #86efac;">Clean Unique</div>
+                  <div id="cleaner-stat-unique" style="font-size: 20px; font-weight: 800; color: #22c55e;">0</div>
+                </div>
+              </div>
+
+              <!-- Save Options Card -->
+              <div style="background: rgba(0,0,0,0.25); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 10px; padding: 16px;">
+                <h4 style="margin: 0 0 12px; color: #fff; font-size: 15px;"><i class="fa-solid fa-floppy-disk text-gold"></i> Choose How to Save:</h4>
+
+                <div style="margin-bottom: 12px;">
+                  <label style="display: flex; align-items: center; gap: 8px; color: #fff; font-size: 14px; cursor: pointer; margin-bottom: 6px;">
+                    <input type="radio" name="cleaner-save-mode" value="merge" checked>
+                    <span><strong>➕ Merge into Existing List (No Duplicates)</strong></span>
+                  </label>
+                  <select id="cleaner-target-file-select" class="form-select" style="margin-top: 4px; margin-left: 24px; width: calc(100% - 24px);"></select>
+                </div>
+
+                <div style="margin-bottom: 16px;">
+                  <label style="display: flex; align-items: center; gap: 8px; color: #fff; font-size: 14px; cursor: pointer; margin-bottom: 6px;">
+                    <input type="radio" name="cleaner-save-mode" value="new">
+                    <span><strong>📄 Save as Brand New Lead File (CSV)</strong></span>
+                  </label>
+                  <input type="text" id="cleaner-new-filename" class="form-input" placeholder="e.g. Cleaned_VIP_Leads_August.csv" style="margin-top: 4px; margin-left: 24px; width: calc(100% - 24px); display: none;">
+                </div>
+
+                <button id="btn-save-cleaned-leads" class="btn btn-primary" style="width: 100%; justify-content: center; background: linear-gradient(135deg, #22c55e, #16a34a); border: 0; box-shadow: 0 4px 15px rgba(34, 197, 94, 0.3);">
+                  <i class="fa-solid fa-cloud-arrow-up"></i> Save List &amp; Sync to Campaign Dispatcher
+                </button>
+              </div>
+
+              <!-- Preview Scrollbox -->
+              <div style="margin-top: 14px;">
+                <label style="font-size: 12px; color: #94a3b8; margin-bottom: 4px; display: block;">Cleaned Unique Emails Preview:</label>
+                <div id="cleaner-preview-list" style="max-height: 100px; overflow-y: auto; background: #0f172a; padding: 10px; border-radius: 6px; border: 1px solid #1e293b; font-family: monospace; font-size: 12px; color: #4ade80;"></div>
+              </div>
+            </div>
+
+            <!-- Empty State Placeholder -->
+            <div id="cleaner-placeholder" style="text-align: center; padding: 30px 20px; color: #64748b; border: 2px dashed rgba(255,255,255,0.1); border-radius: 10px;">
+              <i class="fa-solid fa-filter" style="font-size: 32px; margin-bottom: 10px; color: var(--gold-bright); opacity: 0.5;"></i>
+              <p style="margin: 0; font-size: 13px;">Paste raw emails on the left and click <strong>"1-Click Clean &amp; Deduplicate"</strong> to view filtered results and save!</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3: 3-STAGE DRIP TEMPLATES -->
+    <div id="tab-templates" class="tab-pane">
+      
+      <!-- SMART AI EMAIL TEMPLATE GENERATOR CARD -->
+      <div class="card" style="margin-bottom: 24px; background: linear-gradient(135deg, rgba(30, 27, 75, 0.9), rgba(15, 23, 42, 0.95)); border: 1px solid rgba(245, 158, 11, 0.35); box-shadow: 0 10px 30px rgba(245, 158, 11, 0.1);">
+        <div class="card-title" style="justify-content: space-between; flex-wrap: wrap;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="background: linear-gradient(135deg, #f59e0b, #ef4444); width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 18px;">
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
+            </div>
+            <div>
+              <h2 style="margin: 0; color: #fff; font-size: 17px;">Smart AI Email Template Generator</h2>
+              <p class="card-desc" style="margin: 0; font-size: 12px; color: #fbbf24;">Type what you want to say in Roman Urdu or English — System generates ready-to-send HTML &amp; Plain Text!</p>
+            </div>
+          </div>
+          <div class="quick-preset-chips" style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px;">
+            <button type="button" class="btn btn-xs btn-outline preset-chip" data-prompt="Special Weekend Offer: 100% bonus on deposit over $50, fast CashApp payouts on Fire Kirin &amp; Riversweeps">🎁 100% Bonus</button>
+            <button type="button" class="btn btn-xs btn-outline preset-chip" data-prompt="New Vegas Games Released: Fire Kirin, Orion Stars &amp; Juwa fish tables live. Instant cashouts 24/7.">🎰 New Games</button>
+            <button type="button" class="btn btn-xs btn-outline preset-chip" data-prompt="Instant Cashout Alert: Withdraw your winnings in minutes via CashApp, Crypto, or Bank. No waiting!">⚡ Fast Payouts</button>
+            <button type="button" class="btn btn-xs btn-outline preset-chip" data-prompt="VIP Re-engagement Gift: $25 free spin coins waiting on your Winning Heaven account. Claim now!">🔥 Free Spin Gift</button>
+          </div>
+        </div>
+
+        <div style="margin-top: 16px; display: grid; grid-template-columns: 2fr 1fr; gap: 16px;">
+          <div>
+            <label style="font-size: 13px; font-weight: 700; color: var(--gold-bright); margin-bottom: 6px; display: block;">
+              What do you want your email to say? (Urdu / English):
+            </label>
+            <textarea id="ai-prompt-input" class="form-textarea" rows="3" placeholder="e.g. Aaj ka special offer: 100% extra match bonus on first deposit, instant CashApp withdrawal, play directly in browser at winningheaven.com..."></textarea>
+          </div>
+          <div>
+            <label style="font-size: 13px; font-weight: 700; color: var(--gold-bright); margin-bottom: 6px; display: block;">
+              Select Email Tone:
+            </label>
+            <select id="ai-tone-select" class="form-select" style="margin-bottom: 12px;">
+              <option value="vip">👑 Executive VIP (Recommended)</option>
+              <option value="urgent">⚡ Limited Time / Urgency</option>
+              <option value="friendly">👋 Friendly Conversational</option>
+            </select>
+            <button id="btn-generate-ai-template" class="btn btn-primary" style="width: 100%; justify-content: center; background: linear-gradient(135deg, #f59e0b, #d97706); border: 0; box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);">
+              <i class="fa-solid fa-wand-magic-sparkles"></i> Generate Template
+            </button>
+          </div>
+        </div>
+
+        <!-- GENERATED AI TEMPLATE ACTION BAR -->
+        <div id="ai-generated-action-bar" style="display:none; margin-top: 18px; padding-top: 14px; border-top: 1px dashed rgba(245, 158, 11, 0.3); background: rgba(0,0,0,0.25); padding: 14px; border-radius: 8px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="color: #4ade80; font-weight: 700; font-size: 13px;"><i class="fa-solid fa-circle-check"></i> Custom Template Generated!</span>
+                <span style="background: rgba(34, 197, 94, 0.15); border: 1px solid rgba(34, 197, 94, 0.3); color: #4ade80; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 12px;">
+                  <i class="fa-solid fa-inbox"></i> PRIMARY INBOX VERIFIED (98/100)
+                </span>
+              </div>
+              <div style="font-size: 13px; color: #fff; margin-top: 4px;">Subject: <strong id="ai-generated-subject-preview" class="text-gold">...</strong></div>
+            </div>
+            <div style="display: flex; gap: 10px;">
+              <button id="btn-apply-ai-to-campaign" class="btn btn-primary btn-sm">
+                <i class="fa-solid fa-paper-plane"></i> 1-Click Apply to Campaign
+              </button>
+              <button id="btn-save-ai-template" class="btn btn-secondary btn-sm">
+                <i class="fa-solid fa-floppy-disk"></i> Save to Template List
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="drip-stages-nav">
+        <button class="stage-card active" data-stage="day1_morning_welcome">
+          <div class="stage-number">DAY 1 MORNING</div>
+          <h4>🌅 VIP Welcome &amp; Access</h4>
+          <p>Initial VIP Pass + Portal Access Setup</p>
+        </button>
+        <button class="stage-card" data-stage="day1_evening_benefits">
+          <div class="stage-number">DAY 1 EVENING</div>
+          <h4>🌙 Session Benefit Summary</h4>
+          <p>Day 1 Evening Match Perks &amp; Payout Options</p>
+        </button>
+        <button class="stage-card" data-stage="day2_morning_platform">
+          <div class="stage-number">DAY 2 MORNING</div>
+          <h4>🌅 Direct Web Access Guide</h4>
+          <p>Zero Download Browser Access Guide</p>
+        </button>
+        <button class="stage-card" data-stage="day2_evening_concierge">
+          <div class="stage-number">DAY 2 EVENING</div>
+          <h4>🌙 Personal Host Verification</h4>
+          <p>Concierge Check-in &amp; Account Setup</p>
+        </button>
+        <button class="stage-card" data-stage="day3_morning_loyalty">
+          <div class="stage-number">DAY 3 MORNING</div>
+          <h4>🌅 Member Loyalty Perks</h4>
+          <p>Active Match Credits &amp; Member Drops</p>
+        </button>
+        <button class="stage-card" data-stage="day3_evening_cashout">
+          <div class="stage-number">DAY 3 EVENING</div>
+          <h4>🌙 24/7 Fast Payouts</h4>
+          <p>Instant Settlement via Cash App &amp; Crypto</p>
+        </button>
+        <button class="stage-card" data-stage="day4_morning_midweek">
+          <div class="stage-number">DAY 4 MORNING</div>
+          <h4>🌅 Mid-Week Session Perks</h4>
+          <p>Mid-Week Update &amp; Gaming Hub Access</p>
+        </button>
+        <button class="stage-card" data-stage="day4_evening_reengage">
+          <div class="stage-number">DAY 4 EVENING</div>
+          <h4>🌙 Host Personal Check-In</h4>
+          <p>Executive 1-on-1 Concierge Letter</p>
+        </button>
+        <button class="stage-card" data-stage="day5_morning_games">
+          <div class="stage-number">DAY 5 MORNING</div>
+          <h4>🌅 Featured Games &amp; Arcades</h4>
+          <p>Fire Kirin, Orion Stars &amp; Juwa Catalog</p>
+        </button>
+        <button class="stage-card" data-stage="day5_evening_weekend_kickoff">
+          <div class="stage-number">DAY 5 EVENING</div>
+          <h4>🌙 Weekend Kickoff Perks</h4>
+          <p>Weekend Session Credits &amp; Access</p>
+        </button>
+        <button class="stage-card" data-stage="day6_morning_saturday">
+          <div class="stage-number">DAY 6 MORNING</div>
+          <h4>🌅 Saturday Session Update</h4>
+          <p>Saturday Privileges &amp; Browser Play</p>
+        </button>
+        <button class="stage-card" data-stage="day6_evening_concierge_care">
+          <div class="stage-number">DAY 6 EVENING</div>
+          <h4>🌙 VIP Concierge Care</h4>
+          <p>24/7 Dedicated Support &amp; Care</p>
+        </button>
+        <button class="stage-card" data-stage="day7_morning_weekly_summary">
+          <div class="stage-number">DAY 7 MORNING</div>
+          <h4>🌅 Weekly Account Summary</h4>
+          <p>7-Day Status Review &amp; Credits</p>
+        </button>
+        <button class="stage-card" data-stage="day7_evening_final_courtesy">
+          <div class="stage-number">DAY 7 EVENING</div>
+          <h4>🌙 7-Day Campaign Courtesy</h4>
+          <p>Final Courtesy Update &amp; Preferences</p>
+        </button>
+      </div>
+
+      <div class="templates-grid" style="margin-top: 20px;">
+        <div class="card">
+          <div class="card-title">
+            <i class="fa-solid fa-pen-to-square text-gold"></i>
+            <h2>Template Designer &amp; Copy</h2>
+          </div>
+
+          <div class="form-group">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <label style="margin: 0;">Template Preset:</label>
+              <button id="btn-delete-template" type="button" class="btn btn-xs btn-danger" title="Delete currently selected template" style="gap: 4px; padding: 4px 10px;">
+                <i class="fa-solid fa-trash-can"></i> Delete Selected Template
+              </button>
+            </div>
+            <select id="template-dropdown" class="form-select"></select>
+          </div>
+
+          <div class="form-group">
+            <label>Subject Line:</label>
+            <input type="text" id="editor-subject" class="form-input">
+          </div>
+
+          <div class="form-group">
+            <label>Sender Display Name:</label>
+            <input type="text" id="editor-sender-name" class="form-input" value="Winning Heaven VIP">
+          </div>
+
+          <div class="form-group">
+            <label>HTML Code / Email Body:</label>
+            <textarea id="editor-html" class="form-textarea" rows="12"></textarea>
+          </div>
+
+          <div class="form-group">
+            <label>Plain-Text Fallback (Spam-Proof Version):</label>
+            <textarea id="editor-plain" class="form-textarea" rows="6"></textarea>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">
+            <i class="fa-solid fa-eye text-gold"></i>
+            <h2>Live Inbox Preview</h2>
+          </div>
+          <p class="card-desc">Rendered preview of how the email appears on mobile and desktop:</p>
+          <div class="preview-frame-container">
+            <iframe id="preview-iframe" class="preview-iframe"></iframe>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 4: RECIPIENTS LIST -->
+    <div id="tab-recipients" class="tab-pane">
+      <div class="card">
+        <div class="recipients-header">
+          <div class="card-title">
+            <i class="fa-solid fa-address-book text-gold"></i>
+            <h2>Leads for <code id="recipients-file-badge">client sheet.xlsx</code></h2>
+          </div>
+          <div class="recipients-actions">
+            <input type="text" id="rec-search" placeholder="Search email..." class="form-input search-input">
+            <select id="rec-filter-status" class="form-select filter-select">
+              <option value="all">All Statuses</option>
+              <option value="sent">Delivered (Sent) ✅</option>
+              <option value="failed">Failed / Bounced ❌</option>
+              <option value="pending">In Queue (Pending) ⏳</option>
+            </select>
+            <button id="btn-retry-failed" class="btn btn-warning btn-sm" title="Re-queue only failed emails">
+              <i class="fa-solid fa-arrows-rotate"></i> Retry Failed
+            </button>
+            <a href="/api/export-report" id="btn-export-csv" class="btn btn-outline btn-sm">
+              <i class="fa-solid fa-file-arrow-down"></i> Export CSV
+            </a>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th width="80"># ID</th>
+                <th>Recipient Email Address</th>
+                <th width="140">Status</th>
+                <th width="180">Sent Timestamp</th>
+                <th>Notes / Error</th>
+              </tr>
+            </thead>
+            <tbody id="recipients-table-body">
+              <tr>
+                <td colspan="5" class="text-center">Loading recipients...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="pagination-controls">
+          <button id="btn-prev-page" class="btn btn-sm btn-outline"><i class="fa-solid fa-chevron-left"></i> Previous</button>
+          <span id="page-indicator">Page 1</span>
+          <button id="btn-next-page" class="btn btn-sm btn-outline">Next <i class="fa-solid fa-chevron-right"></i></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 5: ENGAGED LEADS & CLICKS TRACKER -->
+    <div id="tab-clicks" class="tab-pane">
+      <div class="card" style="margin-bottom: 20px; background: linear-gradient(135deg, rgba(30, 27, 75, 0.6), rgba(15, 23, 42, 0.8)); border: 1px solid rgba(245, 158, 11, 0.3);">
+        <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 15px;">
+          <div>
+            <h3 style="color: #f59e0b; margin: 0 0 5px 0; font-size: 18px; font-weight: 700;">
+              <i class="fa-solid fa-bullseye"></i> Real-time Email Button Click Tracking
+            </h3>
+            <p style="margin: 0; color: #94a3b8; font-size: 14px;">
+              Jab bhi koi recipient email template ke button par click karega, uska email + total clicks + time yahan record hoga.
+            </p>
+          </div>
+          <div style="display: flex; gap: 10px; align-items: center;">
+            <button id="btn-test-click-link" type="button" class="btn btn-sm btn-gold" style="white-space: nowrap;">
+              <i class="fa-solid fa-vial"></i> Test Click Tracking Link
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="recipients-header">
+          <div class="card-title">
+            <i class="fa-solid fa-fire text-gold"></i>
+            <h2>Engaged Leads (Users Who Clicked Link)</h2>
+          </div>
+          <div class="recipients-actions">
+            <input type="text" id="clicks-search" placeholder="Search clicked email..." class="form-input search-input">
+            <button id="btn-refresh-clicks" class="btn btn-secondary btn-sm">
+              <i class="fa-solid fa-rotate"></i> Refresh
+            </button>
+            <a href="/api/export-clicks" class="btn btn-primary btn-sm">
+              <i class="fa-solid fa-download"></i> Export Hot Leads (CSV)
+            </a>
+          </div>
+        </div>
+
+        <p class="card-desc">These are the exact users who clicked the Winning Heaven link in their email. Ranked by interest:</p>
+
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th width="80"># ID</th>
+                <th>Client Email Address</th>
+                <th width="160">Total Times Clicked</th>
+                <th width="180">First Click Time</th>
+                <th width="180">Latest Click Time</th>
+              </tr>
+            </thead>
+            <tbody id="clicks-table-body">
+              <tr>
+                <td colspan="5" class="text-center text-muted">No clicks recorded yet.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 6: SETTINGS -->
+    <div id="tab-settings" class="tab-pane">
+      <div class="card max-w-700">
+        <div class="card-title">
+          <i class="fa-solid fa-gear text-gold"></i>
+          <h2>Hostinger SMTP &amp; Anti-Spam Configuration</h2>
+        </div>
+
+        <form id="settings-form">
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label>SMTP Host:</label>
+              <input type="text" id="cfg-smtp-host" class="form-input" value="smtp.hostinger.com">
+            </div>
+            <div class="form-group width-120">
+              <label>Port:</label>
+              <input type="number" id="cfg-smtp-port" class="form-input" value="465">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label>Sender Email (Hostinger Account):</label>
+              <input type="email" id="cfg-sender-email" class="form-input" value="verified@winningheaven.com">
+            </div>
+            <div class="form-group flex-1">
+              <label>Sender Password:</label>
+              <input type="password" id="cfg-sender-pass" class="form-input" value="0761071Na@">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label>Sender Display Name:</label>
+              <input type="text" id="cfg-sender-name" class="form-input" value="Winning Heaven VIP">
+            </div>
+            <div class="form-group flex-1">
+              <label>Reply-To Address:</label>
+              <input type="email" id="cfg-reply-to" class="form-input" value="verified@winningheaven.com">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Click Tracking Base URL (Server IP or Domain for link redirect):</label>
+            <input type="text" id="cfg-tracking-base-url" class="form-input" placeholder="e.g. http://127.0.0.1:5050 or https://yourdomain.com" value="http://127.0.0.1:5050">
+            <small style="color: #94a3b8; display: block; margin-top: 4px;">
+              Email links are automatically converted to <code>TRACKING_URL/r?e=user@email.com&amp;dest=...</code> to record button clicks.
+            </small>
+          </div>
+
+          <hr class="divider">
+
+          <div class="card-title">
+            <i class="fa-solid fa-clock-rotate-left text-gold"></i>
+            <h3>Rate Limiting &amp; Anti-Spam Delays</h3>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label>Min Delay Between Emails (Seconds):</label>
+              <input type="number" id="cfg-min-delay" class="form-input" value="3" min="1" max="60">
+            </div>
+            <div class="form-group flex-1">
+              <label>Max Delay Between Emails (Seconds):</label>
+              <input type="number" id="cfg-max-delay" class="form-input" value="6" min="1" max="60">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label>Batch Size (Emails per batch):</label>
+              <input type="number" id="cfg-batch-size" class="form-input" value="50" min="10" max="200">
+            </div>
+            <div class="form-group flex-1">
+              <label>Batch Pause Duration (Seconds):</label>
+              <input type="number" id="cfg-batch-pause" class="form-input" value="60" min="10" max="600">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label>Daily Email Safety Limit (Auto-Stop at X emails/day):</label>
+              <input type="number" id="cfg-daily-limit" class="form-input" value="850" min="50" max="2000">
+            </div>
+            <div class="form-group flex-1">
+              <label>Quota Safety Strategy:</label>
+              <input type="text" class="form-input" value="Auto-pauses at limit & preserves queue for next day" disabled style="opacity: 0.7; cursor: not-allowed;">
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary">
+            <i class="fa-solid fa-floppy-disk"></i> Save Configuration
+          </button>
+          <span id="save-cfg-msg" class="text-success" style="margin-left: 15px; display:none;">Saved!</span>
+        </form>
+      </div>
+    </div>
+
+    <!-- TAB: SENDER ACCOUNTS & ROTATION -->
+    <div id="tab-senders" class="tab-pane">
+      <div class="card">
+        <div class="recipients-header" style="align-items: center;">
+          <div class="card-title">
+            <i class="fa-solid fa-at text-gold"></i>
+            <div>
+              <h2 style="margin:0;">Multi-Account Sender Rotation &amp; Limits</h2>
+              <p class="card-desc" style="margin-top:2px;">Add Hostinger, Gmail, or custom SMTPs. Set daily limit per account (e.g. 80/day). Auto-rotates when limit is reached!</p>
+            </div>
+          </div>
+          <button id="btn-open-add-sender-modal" class="btn btn-primary">
+            <i class="fa-solid fa-plus"></i> Add Email Account
+          </button>
+        </div>
+
+        <div id="senders-cards-container" class="senders-grid" style="margin-top: 20px;">
+          <!-- Dynamically populated sender cards -->
+        </div>
+
+        <hr class="divider" style="margin: 24px 0;">
+
+        <!-- ANTI-SPAM & GMAIL GUIDELINES CARD -->
+        <div class="spam-guidelines-box" style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: 12px; padding: 20px;">
+          <h3 style="color: var(--gold-bright); font-size: 16px; margin-top: 0; display: flex; align-items: center; gap: 8px;">
+            <i class="fa-solid fa-shield-halved"></i> Anti-Spam Deliverability &amp; Gmail Setup Guide
+          </h3>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; font-size: 13px; color: var(--text-muted); margin-top: 12px;">
+            <div>
+              <h4 style="color: #fff; margin-bottom: 6px;">📩 How to Add Gmail Account:</h4>
+              <ol style="padding-left: 18px; line-height: 1.6; margin: 0;">
+                <li>Enable <strong>2-Step Verification</strong> in Google Account Security.</li>
+                <li>Go to Google Account -&gt; Search <strong>"App Passwords"</strong>.</li>
+                <li>Generate a 16-character password (e.g., <code>abcd efgh ijkl mnop</code>).</li>
+                <li>Click <strong>+ Add Email Account</strong> above, select <strong>Gmail Preset</strong>, enter your Gmail &amp; 16-char App Password!</li>
+              </ol>
+            </div>
+            <div>
+              <h4 style="color: #fff; margin-bottom: 6px;">🛡️ Anti-Spam Best Practices Built-in:</h4>
+              <ul style="padding-left: 18px; line-height: 1.6; margin: 0;">
+                <li><strong>80 Daily Cap per Account:</strong> Prevents accounts from getting flagged by Gmail/Hostinger filters.</li>
+                <li><strong>Automatic Account Switching:</strong> When limit hits 80, system switches to next email without pausing!</li>
+                <li><strong>Randomized Delays (3-6s):</strong> Simulates human typing behavior.</li>
+                <li><strong>Batch Cooling (50 emails/pause 60s):</strong> Cools down SMTP connections.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 7: LIVE LOGS -->
+    <div id="tab-logs" class="tab-pane">
+      <div class="card">
+        <div class="recipients-header">
+          <div class="card-title">
+            <i class="fa-solid fa-terminal text-gold"></i>
+            <h2>Live Dispatch Stream &amp; Delivery Console</h2>
+          </div>
+          <button id="btn-clear-logs-view" class="btn btn-sm btn-outline">
+            <i class="fa-solid fa-trash-can"></i> Clear Screen
+          </button>
+        </div>
+        <div id="live-console" class="terminal-box"></div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ADD SENDER ACCOUNT MODAL -->
+  <div id="modal-add-sender" class="modal-overlay" style="display:none;">
+    <div class="modal-card" style="max-width: 540px;">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-square-plus text-gold"></i> Add Sender Email Account</h3>
+        <button id="btn-close-add-sender-modal" class="btn-close" type="button">&times;</button>
+      </div>
+      <div class="modal-body">
+        <label style="font-size: 13px; font-weight: 700; margin-bottom: 8px; display: block; color: var(--gold-bright);">
+          ⚡ 1-Click Provider Presets:
+        </label>
+        <div class="quick-preset-grid" style="grid-template-columns: 1fr 1fr 1fr; margin-bottom: 16px;">
+          <button type="button" id="preset-btn-hostinger" class="btn btn-sm btn-outline active">
+            <i class="fa-solid fa-server"></i> Hostinger
+          </button>
+          <button type="button" id="preset-btn-gmail" class="btn btn-sm btn-outline">
+            <i class="fa-brands fa-google" style="color:#ea4335;"></i> Gmail (App Pass)
+          </button>
+          <button type="button" id="preset-btn-custom" class="btn btn-sm btn-outline">
+            <i class="fa-solid fa-sliders"></i> Custom SMTP
+          </button>
+        </div>
+
+        <form id="form-add-sender">
+          <input type="hidden" id="sender-provider" value="hostinger">
+
+          <div class="form-group">
+            <label>Account Label / Name:</label>
+            <input type="text" id="sender-name-label" class="form-input" placeholder="e.g. Hostinger Main or Gmail VIP 1" required>
+          </div>
+
+          <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div class="form-group">
+              <label>Sender Email Address:</label>
+              <input type="email" id="sender-email-input" class="form-input" placeholder="e.g. name@domain.com" required>
+            </div>
+            <div class="form-group">
+              <label id="sender-pass-label">Password / App Password:</label>
+              <input type="password" id="sender-pass-input" class="form-input" placeholder="SMTP password or 16-char code" required>
+            </div>
+          </div>
+
+          <div id="gmail-notice-box" style="display:none; background: rgba(234, 67, 53, 0.1); border: 1px solid rgba(234, 67, 53, 0.3); border-radius: 6px; padding: 10px; font-size: 12px; margin-bottom: 12px; color: #ff8a80;">
+            <i class="fa-solid fa-triangle-exclamation"></i> For Gmail, use Google <strong>16-character App Password</strong> (NOT normal Gmail password).
+          </div>
+
+          <div class="form-row" style="display: grid; grid-template-columns: 2fr 1fr; gap: 12px;">
+            <div class="form-group">
+              <label>SMTP Host:</label>
+              <input type="text" id="sender-host-input" class="form-input" value="smtp.hostinger.com" required>
+            </div>
+            <div class="form-group">
+              <label>Port:</label>
+              <input type="number" id="sender-port-input" class="form-input" value="465" required>
+            </div>
+          </div>
+
+          <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div class="form-group">
+              <label>Sender Display Name:</label>
+              <input type="text" id="sender-display-name" class="form-input" value="Winning Heaven VIP">
+            </div>
+            <div class="form-group">
+              <label>Daily Limit (Emails/day):</label>
+              <input type="number" id="sender-daily-limit" class="form-input" value="80" min="1" max="5000" required>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-top: 6px;">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+              <input type="checkbox" id="sender-use-ssl" checked style="width: 16px; height: 16px;">
+              <span>Use SSL Connection (Port 465). Uncheck for TLS (Port 587).</span>
+            </label>
+          </div>
+
+          <div style="margin-top: 18px; display: flex; justify-content: flex-end; gap: 10px;">
+            <button type="button" id="btn-cancel-add-sender" class="btn btn-outline">Cancel</button>
+            <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check"></i> Add Account</button>
+          </div>
+          <div id="add-sender-modal-msg" class="alert-box" style="display:none; margin-top: 12px;"></div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- QUICK DAILY LIMIT MODAL -->
+  <div id="modal-daily-limit" class="modal-overlay" style="display:none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-gauge-high text-gold"></i> Adjust &amp; Extend Daily Email Limit</h3>
+        <button id="btn-close-limit-modal" class="btn-close" type="button">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="card-desc">
+          Emails sent today: <strong id="modal-today-sent" class="text-gold">0</strong> | Current Daily Cap: <strong id="modal-current-limit" class="text-gold">850</strong>
+        </p>
+
+        <label style="font-size: 13px; font-weight: 700; margin-bottom: 8px; display: block; color: var(--gold-bright);">
+          ⚡ 1-Click Quick Extend Limit:
+        </label>
+        <div class="quick-preset-grid">
+          <button class="btn btn-sm btn-outline btn-preset-limit" type="button" data-extend="150">+150 More</button>
+          <button class="btn btn-sm btn-outline btn-preset-limit" type="button" data-extend="300">+300 More</button>
+          <button class="btn btn-sm btn-outline btn-preset-limit" type="button" data-extend="500">+500 More</button>
+          <button class="btn btn-sm btn-outline btn-preset-limit" type="button" data-limit="1000">Set 1,000</button>
+          <button class="btn btn-sm btn-outline btn-preset-limit" type="button" data-limit="1500">Set 1,500</button>
+          <button class="btn btn-sm btn-outline btn-preset-limit" type="button" data-limit="2000">Set 2,000</button>
+        </div>
+
+        <hr class="divider" style="margin: 16px 0;">
+
+        <label style="font-size: 13px; font-weight: 700; margin-bottom: 6px; display: block;">
+          Or Enter Exact Custom Limit:
+        </label>
+        <div style="display: flex; gap: 10px;">
+          <input type="number" id="input-custom-limit" class="form-input" placeholder="e.g. 1000" min="50" max="5000">
+          <button id="btn-save-custom-limit" class="btn btn-primary" type="button">
+            <i class="fa-solid fa-check"></i> Apply Limit
+          </button>
+        </div>
+        <div id="limit-modal-msg" class="alert-box" style="display:none; margin-top: 12px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="app-footer">
+    <p>👑 <strong>Winning Heaven Multi-List Marketing Engine</strong> • Powered by Antigravity • Connected to <code>verified@winningheaven.com</code></p>
+  </footer>
+
+  <script src="/static/js/app.js?v={{ v }}"></script>
+</body>
+</html>

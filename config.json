@@ -1,0 +1,23 @@
+{
+  "smtp_host": "smtp.hostinger.com",
+  "smtp_port": 465,
+  "use_ssl": true,
+  "sender_email": "verified@winningheaven.com",
+  "sender_password": "0761071Na@",
+  "sender_name": "Winning Heaven VIP",
+  "reply_to": "verified@winningheaven.com",
+  "tracking_base_url": "http://127.0.0.1:5050",
+  "min_delay_seconds": 3,
+  "max_delay_seconds": 6,
+  "batch_size": 50,
+  "batch_pause_seconds": 60,
+  "daily_limit": 5000,
+  "target_url": "https://winningheaven.com",
+  "excel_file": "zeeshan_2.csv",
+  "active_file": "Companies_Clean_Leads.xlsx",
+  "file_queue": [
+    "client sheet.xlsx",
+    "zeeshan_emails.csv",
+    "zeeshan_2.csv"
+  ]
+}
