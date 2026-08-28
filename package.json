@@ -1,0 +1,13 @@
+{
+  "name": "marketing-tool",
+  "version": "1.0.0",
+  "description": "Winning Heaven VIP Email Marketing & Deep Verifier Dashboard",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "build": "pip3 install -r requirements.txt || true"
+  },
+  "keywords": ["email", "marketing", "verifier"],
+  "author": "Winning Heaven",
+  "license": "ISC"
+}
