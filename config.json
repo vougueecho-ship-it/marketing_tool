@@ -13,11 +13,9 @@
   "batch_pause_seconds": 60,
   "daily_limit": 5000,
   "target_url": "https://winningheaven.com",
-  "excel_file": "zeeshan_2.csv",
+  "excel_file": "zeeshan_emails.csv",
   "active_file": "Companies_Clean_Leads.xlsx",
   "file_queue": [
-    "client sheet.xlsx",
-    "zeeshan_emails.csv",
     "zeeshan_2.csv"
   ]
 }
