@@ -1,5 +1,7 @@
 #!/bin/bash
 cd "$(dirname "$0")"
+# Free port 5050 if already in use
+lsof -ti:5050 | xargs kill -9 2>/dev/null || true
 echo "======================================================="
 echo " 👑 WINNING HEAVEN EMAIL MARKETING APPLICATION"
 echo "======================================================="
