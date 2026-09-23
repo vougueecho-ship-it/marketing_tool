@@ -15,6 +15,12 @@ from mailer import (
 )
 from templates_data import TEMPLATES, generate_custom_template, add_custom_template
 from verifier import verifier_engine, verify_single_email
+from warmup_engine import (
+    warmup_manager, add_warmup_account, bulk_add_warmup_accounts,
+    graduate_warmup_account, toggle_warmup_account, delete_warmup_account,
+    test_warmup_credentials, get_warmup_stats, get_all_warmup_accounts,
+    get_warmup_logs
+)
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "winningheaven_vip_marketing_secret_key_2026_xyz")
@@ -726,6 +732,79 @@ def export_clicks():
         mimetype="text/csv",
         headers={"Content-disposition": "attachment; filename=winningheaven_engaged_hot_leads.csv"}
     )
+
+# ==================== PEER-TO-PEER GMAIL WARMUP ROUTES ====================
+@app.route("/api/warmup/stats", methods=["GET"])
+def api_warmup_stats():
+    return jsonify({"success": True, "stats": get_warmup_stats()})
+
+@app.route("/api/warmup/accounts", methods=["GET"])
+def api_warmup_accounts():
+    return jsonify({"success": True, "accounts": get_all_warmup_accounts()})
+
+@app.route("/api/warmup/accounts/add", methods=["POST"])
+def api_warmup_account_add():
+    data = request.json or {}
+    ok, msg = add_warmup_account(data)
+    return jsonify({"success": ok, "message": msg})
+
+@app.route("/api/warmup/accounts/bulk", methods=["POST"])
+def api_warmup_account_bulk():
+    data = request.json or {}
+    raw_text = data.get("raw_text", "")
+    res = bulk_add_warmup_accounts(raw_text)
+    return jsonify(res)
+
+@app.route("/api/warmup/accounts/graduate", methods=["POST"])
+def api_warmup_account_graduate():
+    data = request.json or {}
+    acc_id = data.get("id")
+    if not acc_id:
+        return jsonify({"success": False, "message": "Account ID is required."}), 400
+    ok, msg = graduate_warmup_account(acc_id)
+    return jsonify({"success": ok, "message": msg})
+
+@app.route("/api/warmup/accounts/toggle", methods=["POST"])
+def api_warmup_account_toggle():
+    data = request.json or {}
+    acc_id = data.get("id")
+    if not acc_id:
+        return jsonify({"success": False, "message": "Account ID is required."}), 400
+    ok, msg = toggle_warmup_account(acc_id)
+    return jsonify({"success": ok, "message": msg})
+
+@app.route("/api/warmup/accounts/delete", methods=["POST"])
+def api_warmup_account_delete():
+    data = request.json or {}
+    acc_id = data.get("id")
+    if not acc_id:
+        return jsonify({"success": False, "message": "Account ID is required."}), 400
+    ok, msg = delete_warmup_account(acc_id)
+    return jsonify({"success": ok, "message": msg})
+
+@app.route("/api/warmup/accounts/test", methods=["POST"])
+def api_warmup_account_test():
+    data = request.json or {}
+    email_addr = data.get("email", "").strip()
+    password = data.get("password", "").strip()
+    if not email_addr or not password:
+        return jsonify({"success": False, "message": "Email and password required."}), 400
+    res = test_warmup_credentials(email_addr, password)
+    return jsonify(res)
+
+@app.route("/api/warmup/engine/start", methods=["POST"])
+def api_warmup_engine_start():
+    ok = warmup_manager.start()
+    return jsonify({"success": ok, "is_running": warmup_manager.is_running})
+
+@app.route("/api/warmup/engine/stop", methods=["POST"])
+def api_warmup_engine_stop():
+    ok = warmup_manager.stop()
+    return jsonify({"success": ok, "is_running": warmup_manager.is_running})
+
+@app.route("/api/warmup/logs", methods=["GET"])
+def api_warmup_logs():
+    return jsonify({"success": True, "logs": get_warmup_logs(limit=60)})
 
 if __name__ == "__main__":
     print("\n=======================================================")

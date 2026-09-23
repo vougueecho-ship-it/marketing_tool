@@ -116,6 +116,7 @@ document.addEventListener('DOMContentLoaded', () => {
     'tab-recipients': '<i class="fa-solid fa-list-check text-primary"></i> <span>Recipients Queue &amp; Status</span>',
     'tab-clicks': '<i class="fa-solid fa-fire text-warning"></i> <span>Engaged Leads &amp; Clicks Tracker</span>',
     'tab-senders': '<i class="fa-solid fa-at text-primary"></i> <span>Sender Emails &amp; Account Rotation</span>',
+    'tab-warmup': '<i class="fa-solid fa-fire-flame-curved" style="color: #ea580c;"></i> <span>Gmail Warmup &amp; Deliverability Pool</span>',
     'tab-settings': '<i class="fa-solid fa-sliders text-primary"></i> <span>SMTP &amp; Anti-Spam Settings</span>',
     'tab-logs': '<i class="fa-solid fa-terminal text-primary"></i> <span>Live Dispatch Console Stream</span>'
   };
@@ -165,6 +166,8 @@ document.addEventListener('DOMContentLoaded', () => {
         loadFiles();
       } else if (targetId === 'tab-senders') {
         loadSenderAccounts();
+      } else if (targetId === 'tab-warmup') {
+        loadWarmupData();
       }
     });
   });
@@ -2040,11 +2043,669 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // ==================== 10. PEER-TO-PEER GMAIL WARMUP POOL ====================
+  let warmupAccounts = [];
+  let warmupLogs = [];
+  let isWarmupEngineActive = false;
+
+  // DOM Elements - Warmup Tab
+  const tabWarmupCount = document.getElementById('tab-warmup-count');
+  const warmupStatTotal = document.getElementById('warmup-stat-total');
+  const warmupStatMature = document.getElementById('warmup-stat-mature');
+  const warmupStatSentToday = document.getElementById('warmup-stat-sent-today');
+  const warmupStatRepliesToday = document.getElementById('warmup-stat-replies-today');
+  const warmupStatUnspammedToday = document.getElementById('warmup-stat-unspammed-today');
+  const warmupStatAvgHealth = document.getElementById('warmup-stat-avg-health');
+  const warmupEngineStatusBadge = document.getElementById('warmup-engine-status-badge');
+  const btnToggleWarmupEngine = document.getElementById('btn-toggle-warmup-engine');
+  const warmupTableCount = document.getElementById('warmup-table-count');
+  const warmupAccountsTableBody = document.getElementById('warmup-accounts-table-body');
+  const warmupSearchInput = document.getElementById('warmup-search-input');
+  const chkSelectAllWarmup = document.getElementById('chk-select-all-warmup');
+  const btnGraduateSelected = document.getElementById('btn-graduate-selected');
+  const btnRefreshWarmup = document.getElementById('btn-refresh-warmup');
+  const warmupConsole = document.getElementById('warmup-console');
+  const btnClearWarmupLogs = document.getElementById('btn-clear-warmup-logs');
+
+  // Single Add Modal Elements
+  const modalAddWarmup = document.getElementById('modal-add-warmup');
+  const btnOpenAddWarmup = document.getElementById('btn-open-add-warmup');
+  const btnCloseAddWarmup = document.getElementById('btn-close-add-warmup');
+  const formAddWarmup = document.getElementById('form-add-warmup');
+  const warmupInputEmail = document.getElementById('warmup-input-email');
+  const warmupInputPwd = document.getElementById('warmup-input-pwd');
+  const warmupInputName = document.getElementById('warmup-input-name');
+  const btnTestWarmupAccount = document.getElementById('btn-test-warmup-account');
+  const addWarmupModalMsg = document.getElementById('add-warmup-modal-msg');
+
+  // Bulk Import Modal Elements
+  const modalBulkWarmup = document.getElementById('modal-bulk-warmup');
+  const btnOpenBulkWarmup = document.getElementById('btn-open-bulk-warmup');
+  const btnCloseBulkWarmup = document.getElementById('btn-close-bulk-warmup');
+  const btnCancelBulkWarmup = document.getElementById('btn-cancel-bulk-warmup');
+  const formBulkWarmup = document.getElementById('form-bulk-warmup');
+  const bulkWarmupTextarea = document.getElementById('bulk-warmup-textarea');
+  const bulkWarmupModalMsg = document.getElementById('bulk-warmup-modal-msg');
+
+  async function loadWarmupData() {
+    try {
+      const [statsRes, accountsRes, logsRes] = await Promise.all([
+        fetch('/api/warmup/stats'),
+        fetch('/api/warmup/accounts'),
+        fetch('/api/warmup/logs')
+      ]);
+
+      const statsData = await statsRes.json();
+      const accountsData = await accountsRes.json();
+      const logsData = await logsRes.json();
+
+      if (statsData.success && statsData.stats) {
+        renderWarmupStats(statsData.stats);
+      }
+      if (accountsData.success && accountsData.accounts) {
+        warmupAccounts = accountsData.accounts;
+        renderWarmupAccounts();
+      }
+      if (logsData.success && logsData.logs) {
+        warmupLogs = logsData.logs;
+        renderWarmupLogs();
+      }
+    } catch (err) {
+      console.error('Error loading warmup data:', err);
+    }
+  }
+
+  function renderWarmupStats(s) {
+    if (tabWarmupCount) tabWarmupCount.textContent = s.total_accounts || 0;
+    if (warmupTableCount) warmupTableCount.textContent = `${s.total_accounts || 0} Accounts`;
+    if (warmupStatTotal) warmupStatTotal.textContent = s.total_accounts || 0;
+    if (warmupStatMature) warmupStatMature.textContent = s.mature_accounts || 0;
+    if (warmupStatSentToday) warmupStatSentToday.textContent = s.sent_today || 0;
+    if (warmupStatRepliesToday) warmupStatRepliesToday.textContent = s.replied_today || 0;
+    if (warmupStatUnspammedToday) warmupStatUnspammedToday.textContent = s.unspammed_today || 0;
+    if (warmupStatAvgHealth) warmupStatAvgHealth.textContent = `${s.avg_health || 0}%`;
+
+    isWarmupEngineActive = !!s.is_engine_running;
+    if (warmupEngineStatusBadge) {
+      if (isWarmupEngineActive) {
+        warmupEngineStatusBadge.style.background = 'rgba(34, 197, 94, 0.15)';
+        warmupEngineStatusBadge.style.color = '#15803d';
+        warmupEngineStatusBadge.innerHTML = '<i class="fa-solid fa-circle" style="font-size: 8px; color: #16a34a;"></i> Engine Running (P2P Active)';
+      } else {
+        warmupEngineStatusBadge.style.background = 'rgba(148, 163, 184, 0.15)';
+        warmupEngineStatusBadge.style.color = '#64748b';
+        warmupEngineStatusBadge.innerHTML = '<i class="fa-solid fa-circle" style="font-size: 8px;"></i> Engine Stopped';
+      }
+    }
+
+    if (btnToggleWarmupEngine) {
+      if (isWarmupEngineActive) {
+        btnToggleWarmupEngine.className = 'btn btn-danger';
+        btnToggleWarmupEngine.innerHTML = '<i class="fa-solid fa-pause"></i> <span>Stop Warmup Engine</span>';
+      } else {
+        btnToggleWarmupEngine.className = 'btn btn-success';
+        btnToggleWarmupEngine.innerHTML = '<i class="fa-solid fa-play"></i> <span>Start Warmup Engine</span>';
+      }
+    }
+  }
+
+  function renderWarmupAccounts() {
+    if (!warmupAccountsTableBody) return;
+    const query = (warmupSearchInput ? warmupSearchInput.value : '').toLowerCase().trim();
+    const filtered = warmupAccounts.filter(a => {
+      if (!query) return true;
+      return (a.email && a.email.toLowerCase().includes(query)) ||
+             (a.name && a.name.toLowerCase().includes(query));
+    });
+
+    if (filtered.length === 0) {
+      warmupAccountsTableBody.innerHTML = `
+        <tr>
+          <td colspan="8" class="text-center text-muted" style="padding: 35px;">
+            <i class="fa-solid fa-inbox" style="font-size: 28px; margin-bottom: 8px; display: block; color: #94a3b8;"></i>
+            No Gmail accounts found in the Warmup Pool.<br>
+            <span style="font-size: 12px;">Click <strong>"Bulk Import (50+ Accounts)"</strong> or <strong>"Add Gmail"</strong> above to add your accounts!</span>
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    let rowsHtml = '';
+    filtered.forEach(acc => {
+      const days = acc.warmup_days || 1;
+      let stageBadge = '';
+      if (days <= 4) {
+        stageBadge = `<span class="badge badge-cold"><i class="fa-regular fa-snowflake"></i> Day ${days} (Cold: 4-8/day)</span>`;
+      } else if (days <= 9) {
+        stageBadge = `<span class="badge badge-maturing"><i class="fa-solid fa-fire"></i> Day ${days} (Maturing: 10-16/day)</span>`;
+      } else {
+        stageBadge = `<span class="badge badge-mature"><i class="fa-solid fa-circle-check"></i> Day ${days} (Mature: 18-25/day)</span>`;
+      }
+
+      const score = Math.max(0, Math.min(100, acc.health_score || 0));
+      let barColor = '#64748b';
+      if (score >= 90) barColor = '#16a34a';
+      else if (score >= 50) barColor = '#f59e0b';
+
+      let statusBadge = '';
+      if (acc.is_graduated) {
+        statusBadge = `<span class="badge badge-graduated"><i class="fa-solid fa-graduation-cap"></i> Graduated</span>`;
+      } else if (acc.status === 'paused') {
+        statusBadge = `<span class="badge badge-paused"><i class="fa-solid fa-pause"></i> Paused</span>`;
+      } else if (score >= 90) {
+        statusBadge = `<span class="badge badge-mature"><i class="fa-solid fa-circle-check"></i> Mature 🟢</span>`;
+      } else {
+        statusBadge = `<span class="badge badge-maturing"><i class="fa-solid fa-fire"></i> Warming</span>`;
+      }
+
+      const canGraduate = !acc.is_graduated;
+      const graduateBtn = canGraduate 
+        ? `<button class="btn-xs-action btn-warmup-graduate" data-id="${acc.id}" title="Graduate to active Campaign Senders (80 daily limit)" style="background: rgba(34, 197, 94, 0.12); color: #16a34a; border-color: rgba(34, 197, 94, 0.3);">
+             <i class="fa-solid fa-graduation-cap"></i> Graduate
+           </button>`
+        : `<span style="font-size: 11px; color: #2563eb; font-weight: 600;"><i class="fa-solid fa-check"></i> In Senders</span>`;
+
+      rowsHtml += `
+        <tr>
+          <td style="text-align: center;">
+            <input type="checkbox" class="chk-warmup-item" data-id="${acc.id}" data-mature="${score >= 90 ? '1' : '0'}" ${acc.is_graduated ? 'disabled' : ''}>
+          </td>
+          <td>
+            <div style="font-weight: 600; color: var(--text-primary); font-size: 13px; display: flex; align-items: center; gap: 6px;">
+              <i class="fa-brands fa-google" style="color: #ea4335;"></i>
+              ${escapeHtml(acc.email)}
+            </div>
+            ${acc.name ? `<div style="font-size: 11px; color: var(--text-muted);">${escapeHtml(acc.name)}</div>` : ''}
+          </td>
+          <td>${stageBadge}</td>
+          <td>
+            <div style="display: flex; justify-content: space-between; font-size: 11.5px; font-weight: 700; color: ${barColor};">
+              <span>Health Score</span>
+              <span>${score}%</span>
+            </div>
+            <div class="health-bar-bg">
+              <div class="health-bar-fill" style="width: ${score}%; background: ${barColor};"></div>
+            </div>
+          </td>
+          <td>
+            <div style="font-size: 12px; font-weight: 600; color: var(--text-primary);">
+              ${acc.sent_today || 0} / ${acc.daily_target || 5} sent
+            </div>
+            <div style="font-size: 11px; color: var(--text-muted);">
+              ${acc.replied_today || 0} replies • ${acc.unspammed_today || 0} unspammed
+            </div>
+          </td>
+          <td>
+            <div style="font-size: 12px; color: var(--text-secondary);">
+              <strong>${acc.total_sent || 0}</strong> sent • <strong>${acc.total_received || 0}</strong> recv
+            </div>
+            <div style="font-size: 11px; color: var(--text-muted);">
+              ${acc.total_replied || 0} replies • ${acc.total_unspammed || 0} unspammed
+            </div>
+          </td>
+          <td>${statusBadge}</td>
+          <td style="text-align: right;">
+            <div style="display: inline-flex; gap: 6px; align-items: center;">
+              ${graduateBtn}
+              <button class="btn-xs-action btn-warmup-test" data-email="${acc.email}" data-pwd="${acc.password}" title="Test SMTP/IMAP login">
+                <i class="fa-solid fa-bolt"></i>
+              </button>
+              <button class="btn-xs-action btn-warmup-toggle" data-id="${acc.id}" title="${acc.status === 'paused' ? 'Resume' : 'Pause'}">
+                <i class="fa-solid ${acc.status === 'paused' ? 'fa-play' : 'fa-pause'}"></i>
+              </button>
+              <button class="btn-xs-action btn-warmup-delete" data-id="${acc.id}" data-email="${acc.email}" title="Delete account" style="color: #ef4444;">
+                <i class="fa-solid fa-trash-can"></i>
+              </button>
+            </div>
+          </td>
+        </tr>
+      `;
+    });
+
+    warmupAccountsTableBody.innerHTML = rowsHtml;
+  }
+
+  function renderWarmupLogs() {
+    if (!warmupConsole) return;
+    if (warmupLogs.length === 0) {
+      warmupConsole.innerHTML = `<div style="color: #94a3b8;"><i class="fa-solid fa-info-circle"></i> Waiting for warmup activity... Click "Start Warmup Engine" to begin automated P2P exchanges.</div>`;
+      return;
+    }
+
+    let logsHtml = '';
+    warmupLogs.slice(0, 50).forEach(log => {
+      let actionColor = '#38bdf8';
+      let icon = 'fa-arrow-right';
+      if (log.action === 'SENT_WARMUP') {
+        actionColor = '#4ade80';
+        icon = 'fa-paper-plane';
+      } else if (log.action === 'AUTOREPLIED') {
+        actionColor = '#c084fc';
+        icon = 'fa-reply';
+      } else if (log.action === 'UNSPAMMED') {
+        actionColor = '#fbbf24';
+        icon = 'fa-shield-virus';
+      } else if (log.action === 'ERROR') {
+        actionColor = '#f87171';
+        icon = 'fa-triangle-exclamation';
+      } else if (log.action === 'GRADUATED') {
+        actionColor = '#34d399';
+        icon = 'fa-graduation-cap';
+      }
+
+      logsHtml += `
+        <div style="margin-bottom: 4px; display: flex; gap: 8px; flex-wrap: wrap;">
+          <span style="color: #64748b;">[${log.timestamp || ''}]</span>
+          <span style="color: ${actionColor}; font-weight: 700;"><i class="fa-solid ${icon}"></i> [${log.action}]</span>
+          ${log.from_email ? `<span style="color: #cbd5e1;">${escapeHtml(log.from_email)}</span>` : ''}
+          ${log.to_email ? `<span style="color: #94a3b8;">&rarr; ${escapeHtml(log.to_email)}</span>` : ''}
+          <span style="color: #94a3b8;">${escapeHtml(log.details || '')}</span>
+        </div>
+      `;
+    });
+
+    warmupConsole.innerHTML = logsHtml;
+  }
+
+  // Toggle Warmup Engine (Start / Stop)
+  if (btnToggleWarmupEngine) {
+    btnToggleWarmupEngine.addEventListener('click', async () => {
+      btnToggleWarmupEngine.disabled = true;
+      const endpoint = isWarmupEngineActive ? '/api/warmup/engine/stop' : '/api/warmup/engine/start';
+      try {
+        const res = await fetch(endpoint, { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+          await loadWarmupData();
+        } else {
+          alert('Warmup engine error: ' + (data.error || 'Failed to toggle.'));
+        }
+      } catch (err) {
+        alert('Network error toggling warmup engine: ' + err.message);
+      } finally {
+        btnToggleWarmupEngine.disabled = false;
+      }
+    });
+  }
+
+  // Refresh Warmup Pool
+  if (btnRefreshWarmup) {
+    btnRefreshWarmup.addEventListener('click', () => {
+      btnRefreshWarmup.classList.add('fa-spin');
+      loadWarmupData().finally(() => {
+        setTimeout(() => btnRefreshWarmup.classList.remove('fa-spin'), 600);
+      });
+    });
+  }
+
+  // Search Filter
+  if (warmupSearchInput) {
+    warmupSearchInput.addEventListener('input', () => {
+      renderWarmupAccounts();
+    });
+  }
+
+  // Select All Warmup Items
+  if (chkSelectAllWarmup) {
+    chkSelectAllWarmup.addEventListener('change', () => {
+      const isChecked = chkSelectAllWarmup.checked;
+      document.querySelectorAll('.chk-warmup-item:not(:disabled)').forEach(chk => {
+        chk.checked = isChecked;
+      });
+    });
+  }
+
+  // Graduate Selected Accounts (Bulk)
+  if (btnGraduateSelected) {
+    btnGraduateSelected.addEventListener('click', async () => {
+      const selected = Array.from(document.querySelectorAll('.chk-warmup-item:checked:not(:disabled)'));
+      if (selected.length === 0) {
+        alert('Please select one or more accounts to graduate into active Campaign Senders rotation.');
+        return;
+      }
+
+      if (!confirm(`Are you sure you want to graduate ${selected.length} account(s) into active Campaign Senders? They will receive an 80 daily limit and start sending outreach marketing emails.`)) {
+        return;
+      }
+
+      btnGraduateSelected.disabled = true;
+      btnGraduateSelected.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Graduating...';
+
+      let successCount = 0;
+      for (const chk of selected) {
+        const accId = chk.getAttribute('data-id');
+        try {
+          const res = await fetch('/api/warmup/accounts/graduate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: accId })
+          });
+          const d = await res.json();
+          if (d.success) successCount++;
+        } catch (e) {
+          console.error('Graduate error:', e);
+        }
+      }
+
+      btnGraduateSelected.disabled = false;
+      btnGraduateSelected.innerHTML = '<i class="fa-solid fa-graduation-cap" style="color: #16a34a;"></i> Graduate Selected (🟢)';
+      alert(`Successfully graduated ${successCount} account(s) to Campaign Senders!`);
+      await loadWarmupData();
+      await loadSenderAccounts();
+    });
+  }
+
+  // Table Action Buttons (Graduate, Test, Toggle, Delete)
+  if (warmupAccountsTableBody) {
+    warmupAccountsTableBody.addEventListener('click', async (e) => {
+      const btnGraduate = e.target.closest('.btn-warmup-graduate');
+      const btnTest = e.target.closest('.btn-warmup-test');
+      const btnToggle = e.target.closest('.btn-warmup-toggle');
+      const btnDelete = e.target.closest('.btn-warmup-delete');
+
+      if (btnGraduate) {
+        const id = btnGraduate.getAttribute('data-id');
+        if (!confirm('Graduate this account to active Campaign Senders? It will immediately be available in your campaign sender rotation with an 80/day safety cap.')) return;
+        btnGraduate.disabled = true;
+        btnGraduate.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+        try {
+          const res = await fetch('/api/warmup/accounts/graduate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: id })
+          });
+          const data = await res.json();
+          alert(data.message || (data.success ? 'Account graduated!' : 'Failed.'));
+          await loadWarmupData();
+          await loadSenderAccounts();
+        } catch (err) {
+          alert('Error: ' + err.message);
+        }
+      }
+
+      if (btnTest) {
+        const email = btnTest.getAttribute('data-email');
+        const pwd = btnTest.getAttribute('data-pwd');
+        btnTest.disabled = true;
+        btnTest.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+        try {
+          const res = await fetch('/api/warmup/accounts/test', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: email, password: pwd })
+          });
+          const data = await res.json();
+          if (data.success) {
+            alert(`✅ Credentials Verified Successfully for ${email}!\n• SMTP SSL (465): Connected & Authenticated\n• IMAP SSL (993): Connected & Authenticated`);
+          } else {
+            const errs = (data.errors || []).join('\n');
+            alert(`❌ Credential Test Failed for ${email}:\n${errs}\n\nPlease verify that 2-Step Verification is ON and a valid 16-character Google App Password was provided.`);
+          }
+        } catch (err) {
+          alert('Network error testing credentials: ' + err.message);
+        } finally {
+          btnTest.disabled = false;
+          btnTest.innerHTML = '<i class="fa-solid fa-bolt"></i>';
+        }
+      }
+
+      if (btnToggle) {
+        const id = btnToggle.getAttribute('data-id');
+        btnToggle.disabled = true;
+        try {
+          const res = await fetch('/api/warmup/accounts/toggle', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: id })
+          });
+          const data = await res.json();
+          if (data.success) {
+            await loadWarmupData();
+          }
+        } catch (err) {
+          console.error(err);
+        }
+      }
+
+      if (btnDelete) {
+        const id = btnDelete.getAttribute('data-id');
+        const email = btnDelete.getAttribute('data-email');
+        if (!confirm(`Are you sure you want to remove '${email}' from the Warmup Pool?`)) return;
+        btnDelete.disabled = true;
+        try {
+          const res = await fetch('/api/warmup/accounts/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: id })
+          });
+          const data = await res.json();
+          if (data.success) {
+            await loadWarmupData();
+          }
+        } catch (err) {
+          alert('Delete error: ' + err.message);
+        }
+      }
+    });
+  }
+
+  // Clear Warmup Console
+  if (btnClearWarmupLogs) {
+    btnClearWarmupLogs.addEventListener('click', () => {
+      if (warmupConsole) {
+        warmupConsole.innerHTML = `<div style="color: #94a3b8;"><i class="fa-solid fa-info-circle"></i> Stream cleared.</div>`;
+      }
+    });
+  }
+
+  // Modal: Add Single Warmup Account
+  if (btnOpenAddWarmup && modalAddWarmup) {
+    btnOpenAddWarmup.addEventListener('click', () => {
+      if (formAddWarmup) formAddWarmup.reset();
+      if (addWarmupModalMsg) addWarmupModalMsg.style.display = 'none';
+      modalAddWarmup.style.display = 'flex';
+    });
+  }
+
+  if (btnCloseAddWarmup && modalAddWarmup) {
+    btnCloseAddWarmup.addEventListener('click', () => {
+      modalAddWarmup.style.display = 'none';
+    });
+  }
+
+  if (btnTestWarmupAccount) {
+    btnTestWarmupAccount.addEventListener('click', async () => {
+      const email = (warmupInputEmail ? warmupInputEmail.value : '').trim();
+      const pwd = (warmupInputPwd ? warmupInputPwd.value : '').trim();
+      if (!email || !pwd) {
+        if (addWarmupModalMsg) {
+          addWarmupModalMsg.className = 'alert-box alert-error';
+          addWarmupModalMsg.textContent = 'Please fill in both Gmail address and 16-character App Password before testing.';
+          addWarmupModalMsg.style.display = 'block';
+        }
+        return;
+      }
+
+      btnTestWarmupAccount.disabled = true;
+      btnTestWarmupAccount.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Testing...';
+      if (addWarmupModalMsg) addWarmupModalMsg.style.display = 'none';
+
+      try {
+        const res = await fetch('/api/warmup/accounts/test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email, password: pwd })
+        });
+        const data = await res.json();
+        if (addWarmupModalMsg) {
+          if (data.success) {
+            addWarmupModalMsg.className = 'alert-box alert-success';
+            addWarmupModalMsg.innerHTML = '<strong>✅ Test Passed!</strong> SMTP (465) &amp; IMAP (993) connected and authenticated successfully.';
+          } else {
+            addWarmupModalMsg.className = 'alert-box alert-error';
+            addWarmupModalMsg.innerHTML = '<strong>❌ Test Failed!</strong> ' + ((data.errors || []).join(' | ') || 'Check 2-Step Verification and App Password.');
+          }
+          addWarmupModalMsg.style.display = 'block';
+        }
+      } catch (err) {
+        if (addWarmupModalMsg) {
+          addWarmupModalMsg.className = 'alert-box alert-error';
+          addWarmupModalMsg.textContent = 'Test error: ' + err.message;
+          addWarmupModalMsg.style.display = 'block';
+        }
+      } finally {
+        btnTestWarmupAccount.disabled = false;
+        btnTestWarmupAccount.innerHTML = '<i class="fa-solid fa-bolt"></i> Test Credentials';
+      }
+    });
+  }
+
+  if (formAddWarmup) {
+    formAddWarmup.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = (warmupInputEmail ? warmupInputEmail.value : '').trim();
+      const pwd = (warmupInputPwd ? warmupInputPwd.value : '').trim();
+      const name = (warmupInputName ? warmupInputName.value : '').trim();
+
+      if (!email || !pwd) return;
+
+      const submitBtn = formAddWarmup.querySelector('button[type="submit"]');
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Adding...';
+      }
+
+      try {
+        const res = await fetch('/api/warmup/accounts/add', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email, password: pwd, name: name })
+        });
+        const data = await res.json();
+        if (data.success) {
+          if (addWarmupModalMsg) {
+            addWarmupModalMsg.className = 'alert-box alert-success';
+            addWarmupModalMsg.textContent = data.message;
+            addWarmupModalMsg.style.display = 'block';
+          }
+          setTimeout(() => {
+            if (modalAddWarmup) modalAddWarmup.style.display = 'none';
+            loadWarmupData();
+          }, 800);
+        } else {
+          if (addWarmupModalMsg) {
+            addWarmupModalMsg.className = 'alert-box alert-error';
+            addWarmupModalMsg.textContent = data.message || 'Failed to add account.';
+            addWarmupModalMsg.style.display = 'block';
+          }
+        }
+      } catch (err) {
+        if (addWarmupModalMsg) {
+          addWarmupModalMsg.className = 'alert-box alert-error';
+          addWarmupModalMsg.textContent = 'Network error: ' + err.message;
+          addWarmupModalMsg.style.display = 'block';
+        }
+      } finally {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = '<i class="fa-solid fa-plus"></i> Add to Warmup Pool';
+        }
+      }
+    });
+  }
+
+  // Modal: Bulk Import Warmup Accounts (50+ Accounts)
+  if (btnOpenBulkWarmup && modalBulkWarmup) {
+    btnOpenBulkWarmup.addEventListener('click', () => {
+      if (formBulkWarmup) formBulkWarmup.reset();
+      if (bulkWarmupModalMsg) bulkWarmupModalMsg.style.display = 'none';
+      modalBulkWarmup.style.display = 'flex';
+    });
+  }
+
+  if (btnCloseBulkWarmup && modalBulkWarmup) {
+    btnCloseBulkWarmup.addEventListener('click', () => {
+      modalBulkWarmup.style.display = 'none';
+    });
+  }
+
+  if (btnCancelBulkWarmup && modalBulkWarmup) {
+    btnCancelBulkWarmup.addEventListener('click', () => {
+      modalBulkWarmup.style.display = 'none';
+    });
+  }
+
+  if (formBulkWarmup) {
+    formBulkWarmup.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const rawText = (bulkWarmupTextarea ? bulkWarmupTextarea.value : '').trim();
+      if (!rawText) {
+        if (bulkWarmupModalMsg) {
+          bulkWarmupModalMsg.className = 'alert-box alert-error';
+          bulkWarmupModalMsg.textContent = 'Please paste at least one account (email,password).';
+          bulkWarmupModalMsg.style.display = 'block';
+        }
+        return;
+      }
+
+      const submitBtn = formBulkWarmup.querySelector('button[type="submit"]');
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Importing...';
+      }
+
+      try {
+        const res = await fetch('/api/warmup/accounts/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ raw_text: rawText })
+        });
+        const data = await res.json();
+        if (data.success) {
+          if (bulkWarmupModalMsg) {
+            bulkWarmupModalMsg.className = 'alert-box alert-success';
+            bulkWarmupModalMsg.innerHTML = `<strong>🎉 ${data.message}</strong><br>All accounts placed in <strong>Day 1 (Cold: 4–8 emails/day)</strong>.`;
+            bulkWarmupModalMsg.style.display = 'block';
+          }
+          setTimeout(() => {
+            if (modalBulkWarmup) modalBulkWarmup.style.display = 'none';
+            loadWarmupData();
+          }, 1400);
+        } else {
+          if (bulkWarmupModalMsg) {
+            bulkWarmupModalMsg.className = 'alert-box alert-error';
+            bulkWarmupModalMsg.textContent = data.message || 'Import failed.';
+            bulkWarmupModalMsg.style.display = 'block';
+          }
+        }
+      } catch (err) {
+        if (bulkWarmupModalMsg) {
+          bulkWarmupModalMsg.className = 'alert-box alert-error';
+          bulkWarmupModalMsg.textContent = 'Network error: ' + err.message;
+          bulkWarmupModalMsg.style.display = 'block';
+        }
+      } finally {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = '<i class="fa-solid fa-upload"></i> Import Accounts';
+        }
+      }
+    });
+  }
+
+  // Close modals on overlay backdrop click
+  window.addEventListener('click', (e) => {
+    if (e.target === modalAddWarmup) modalAddWarmup.style.display = 'none';
+    if (e.target === modalBulkWarmup) modalBulkWarmup.style.display = 'none';
+  });
+
   // ==================== INITIALIZATION ====================
   loadFiles();
   loadTemplates();
   loadSettings();
   loadSenderAccounts();
+  loadWarmupData();
   fetchStats();
   fetchLogs();
 
@@ -2052,6 +2713,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (isPolling) {
       fetchStats();
       fetchLogs();
+      // Periodically refresh warmup stats & stream
+      const warmupTab = document.getElementById('tab-warmup');
+      if (isWarmupEngineActive || (warmupTab && warmupTab.classList.contains('active'))) {
+        loadWarmupData();
+      }
     }
   }, 1800);
 });
