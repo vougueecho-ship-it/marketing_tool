@@ -22,6 +22,25 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOADS_DIR = os.path.join(BASE_DIR, "uploads")
 DB_PATH = os.path.join(BASE_DIR, "campaign_data.db")
 CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
+STATE_PATH = os.path.join(BASE_DIR, "campaign_state.json")
+
+def load_campaign_state():
+    if os.path.exists(STATE_PATH):
+        try:
+            with open(STATE_PATH, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            logger.error(f"Error reading campaign_state.json: {e}")
+    return {}
+
+def save_campaign_state(state_dict):
+    try:
+        current = load_campaign_state()
+        current.update(state_dict)
+        with open(STATE_PATH, "w", encoding="utf-8") as f:
+            json.dump(current, f, indent=2)
+    except Exception as e:
+        logger.error(f"Error writing campaign_state.json: {e}")
 
 os.makedirs(UPLOADS_DIR, exist_ok=True)
 
@@ -570,14 +589,44 @@ class EmailMarketingManager:
         self.current_subject = ""
         self.current_html = ""
         self.current_plain = ""
+        self.sender_name = None
         self.preferred_sender_account_id = None
         self.lock = threading.Lock()
         
         init_db()
         cfg = load_config()
-        self.active_file = cfg.get("excel_file", "client sheet.xlsx")
-        self.file_queue = cfg.get("file_queue", [])
+        state = load_campaign_state()
+
+        # Prioritize persistent state over static config
+        self.active_file = state.get("active_file") or cfg.get("excel_file", "client sheet.xlsx")
+        self.file_queue = state.get("file_queue") if "file_queue" in state else cfg.get("file_queue", [])
+        
+        if state.get("subject"):
+            self.current_subject = state.get("subject", "")
+            self.current_html = state.get("html_body", "")
+            self.current_plain = state.get("plain_body", "")
+            self.sender_name = state.get("sender_name")
+            self.preferred_sender_account_id = state.get("preferred_sender_account_id")
+
         load_file_recipients(self.active_file)
+
+        # Automatic Resume if campaign was actively running when system rebooted / restarted
+        if state.get("is_running") and not state.get("is_paused") and (self.current_html or self.current_plain):
+            def _auto_resume():
+                time.sleep(3)  # Allow Flask server and DB connections to initialize
+                with self.lock:
+                    if not self.is_running and not self.stop_requested:
+                        log_event(f"🔄 Auto-Resume: Server restart detected. Resuming campaign on '{self.active_file}' from exact checkpoint...", level="INFO")
+                        self.start_campaign(
+                            subject=self.current_subject,
+                            html_body=self.current_html,
+                            plain_body=self.current_plain,
+                            sender_name=self.sender_name,
+                            file_name=self.active_file,
+                            file_queue=self.file_queue,
+                            sender_account_id=self.preferred_sender_account_id
+                        )
+            threading.Thread(target=_auto_resume, daemon=True).start()
 
     def set_active_file(self, file_name):
         with self.lock:
@@ -587,6 +636,7 @@ class EmailMarketingManager:
             cfg = load_config()
             cfg["excel_file"] = file_name
             save_config(cfg)
+            save_campaign_state({"active_file": file_name})
             
             total, added = load_file_recipients(file_name)
             log_event(f"Switched active lead file to '{file_name}' ({total} total leads).")
@@ -599,6 +649,7 @@ class EmailMarketingManager:
             cfg = load_config()
             cfg["file_queue"] = self.file_queue
             save_config(cfg)
+            save_campaign_state({"file_queue": self.file_queue})
             q_str = " ➔ ".join(self.file_queue) if self.file_queue else "None"
             log_event(f"📋 Campaign Queue updated: {q_str}")
             return True, f"Queue set with {len(self.file_queue)} file(s)."
@@ -715,6 +766,8 @@ class EmailMarketingManager:
             "is_running": self.is_running,
             "is_paused": self.is_paused,
             "current_email": self.current_email,
+            "current_subject": getattr(self, "current_subject", ""),
+            "current_sender_name": getattr(self, "sender_name", ""),
             "accounts_count": len(accounts),
             "enabled_accounts_count": len(enabled_accounts),
             "active_sender_email": active_account or "No Active Account"
@@ -783,6 +836,7 @@ class EmailMarketingManager:
             self.is_running = False
             self.is_paused = False
             self.stop_requested = False
+            save_campaign_state({"is_running": False, "is_paused": False, "updated_at": time.strftime("%Y-%m-%d %H:%M:%S")})
             
             conn = get_db()
             cursor = conn.cursor()
@@ -861,6 +915,7 @@ class EmailMarketingManager:
             if self.is_running:
                 if self.is_paused:
                     self.is_paused = False
+                    save_campaign_state({"is_paused": False, "is_running": True, "updated_at": time.strftime("%Y-%m-%d %H:%M:%S")})
                     log_event("Campaign Resumed.")
                     return True
                 return False
@@ -884,6 +939,20 @@ class EmailMarketingManager:
             self.current_subject = subject
             self.current_html = html_body
             self.current_plain = plain_body
+            self.sender_name = sender_name
+
+            save_campaign_state({
+                "is_running": True,
+                "is_paused": False,
+                "subject": subject,
+                "html_body": html_body,
+                "plain_body": plain_body,
+                "sender_name": sender_name,
+                "active_file": self.active_file,
+                "file_queue": self.file_queue,
+                "preferred_sender_account_id": self.preferred_sender_account_id,
+                "updated_at": time.strftime("%Y-%m-%d %H:%M:%S")
+            })
             
             self.worker_thread = threading.Thread(target=self._run_campaign_loop, daemon=True)
             self.worker_thread.start()
@@ -896,6 +965,7 @@ class EmailMarketingManager:
         with self.lock:
             if self.is_running and not self.is_paused:
                 self.is_paused = True
+                save_campaign_state({"is_paused": True, "updated_at": time.strftime("%Y-%m-%d %H:%M:%S")})
                 log_event("⏸️ Campaign Paused by user.")
                 return True
             return False
@@ -907,6 +977,7 @@ class EmailMarketingManager:
                 self.is_running = False
                 self.is_paused = False
                 self.current_email = ""
+                save_campaign_state({"is_running": False, "is_paused": False, "updated_at": time.strftime("%Y-%m-%d %H:%M:%S")})
                 log_event("⏹️ Campaign Stopped by user.")
                 return True
             return False
@@ -964,6 +1035,7 @@ class EmailMarketingManager:
                     log_event(f"🛑 OVERALL CAMPAIGN DAILY LIMIT REACHED ({today_total_sent}/{global_limit} emails sent today)! Campaign paused. Change global cap or resume tomorrow.", level="WARNING")
                     self.is_paused = True
                     self.current_email = ""
+                    save_campaign_state({"is_paused": True, "updated_at": time.strftime("%Y-%m-%d %H:%M:%S")})
                     if server:
                         try:
                             server.quit()
@@ -997,6 +1069,7 @@ class EmailMarketingManager:
                     log_event("🛑 INDIVIDUAL DAILY LIMIT REACHED FOR ALL SENDER ACCOUNTS! Campaign automatically paused to protect deliverability. Add accounts or increase limits.", level="WARNING")
                     self.is_paused = True
                     self.current_email = ""
+                    save_campaign_state({"is_paused": True, "updated_at": time.strftime("%Y-%m-%d %H:%M:%S")})
                     if server:
                         try:
                             server.quit()
@@ -1040,11 +1113,23 @@ class EmailMarketingManager:
                         cfg["excel_file"] = next_file
                         cfg["file_queue"] = self.file_queue
                         save_config(cfg)
+                        save_campaign_state({
+                            "active_file": next_file,
+                            "file_queue": self.file_queue,
+                            "updated_at": time.strftime("%Y-%m-%d %H:%M:%S")
+                        })
                         
                         log_event(f"📁 List '{prev_file}' complete! Automatically advancing to next queued file: '{next_file}' ({len(self.file_queue)} remaining in queue).", level="SUCCESS")
                         continue
                     else:
                         log_event(f"🎉 All emails in list '{prev_file}' and campaign queue processed! Campaign complete.", level="SUCCESS")
+                        self.is_running = False
+                        self.is_paused = False
+                        save_campaign_state({
+                            "is_running": False,
+                            "is_paused": False,
+                            "updated_at": time.strftime("%Y-%m-%d %H:%M:%S")
+                        })
                         break
 
                 rec_id = row["id"]
@@ -1172,8 +1257,12 @@ class EmailMarketingManager:
                 except Exception:
                     pass
             with self.lock:
-                self.is_running = False
-                self.is_paused = False
+                if self.is_paused:
+                    save_campaign_state({"is_paused": True, "updated_at": time.strftime("%Y-%m-%d %H:%M:%S")})
+                else:
+                    self.is_running = False
+                    self.is_paused = False
+                    save_campaign_state({"is_running": False, "is_paused": False, "updated_at": time.strftime("%Y-%m-%d %H:%M:%S")})
                 self.current_email = ""
 
 

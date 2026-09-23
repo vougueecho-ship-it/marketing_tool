@@ -700,6 +700,13 @@ document.addEventListener('DOMContentLoaded', () => {
         recipientsFileBadge.textContent = activeFile;
       }
 
+      if (ctrlSubject && !ctrlSubject.value && data.current_subject) {
+        ctrlSubject.value = data.current_subject;
+      }
+      if (ctrlSenderName && !ctrlSenderName.value && data.current_sender_name) {
+        ctrlSenderName.value = data.current_sender_name;
+      }
+
       if (statTotal) statTotal.textContent = Number(data.total || 0).toLocaleString();
       if (statSent) statSent.textContent = Number(data.sent || 0).toLocaleString();
       if (statPending) statPending.textContent = Number(data.pending || 0).toLocaleString();

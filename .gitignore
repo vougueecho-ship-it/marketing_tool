@@ -9,3 +9,5 @@ campaign_data.db
 *.sqlite3
 scratch/
 uploads/engaged_hot_leads.csv
+campaign_state.json
+*.state.json
