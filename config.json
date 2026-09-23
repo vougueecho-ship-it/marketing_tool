@@ -6,7 +6,7 @@
   "sender_password": "0761071Na@",
   "sender_name": "Winning Heaven VIP",
   "reply_to": "verified@winningheaven.com",
-  "tracking_base_url": "http://127.0.0.1:5050",
+  "tracking_base_url": "https://tool.winningheaven.com",
   "min_delay_seconds": 3,
   "max_delay_seconds": 6,
   "batch_size": 50,

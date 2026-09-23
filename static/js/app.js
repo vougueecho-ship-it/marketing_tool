@@ -858,8 +858,27 @@ document.addEventListener('DOMContentLoaded', () => {
       window.open(testUrl, '_blank');
       setTimeout(() => {
         loadClicks();
-        loadStats();
+        fetchStats();
       }, 1000);
+    });
+  }
+
+  const btnUseEngagedLeadsCampaign = document.getElementById('btn-use-engaged-leads-campaign');
+  if (btnUseEngagedLeadsCampaign) {
+    btnUseEngagedLeadsCampaign.addEventListener('click', async () => {
+      btnUseEngagedLeadsCampaign.disabled = true;
+      btnUseEngagedLeadsCampaign.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading...';
+      try {
+        await loadFiles();
+        await selectFile('engaged_hot_leads.csv');
+        const campaignTabBtn = document.querySelector('[data-tab="tab-control"]');
+        if (campaignTabBtn) campaignTabBtn.click();
+      } catch (err) {
+        console.error('Error switching to engaged leads list:', err);
+      } finally {
+        btnUseEngagedLeadsCampaign.disabled = false;
+        btnUseEngagedLeadsCampaign.innerHTML = '<i class="fa-solid fa-rocket"></i> Load into Campaign Dispatcher';
+      }
     });
   }
 

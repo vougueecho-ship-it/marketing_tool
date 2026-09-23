@@ -288,6 +288,31 @@ def log_event(message, level="INFO", recipient=""):
     conn.close()
     print(f"[{timestamp}] [{level}] {message}")
 
+ENGAGED_LEADS_FILENAME = "engaged_hot_leads.csv"
+ENGAGED_LEADS_PATH = os.path.join(UPLOADS_DIR, ENGAGED_LEADS_FILENAME)
+
+def sync_engaged_leads_file():
+    """
+    Saves and synchronizes all hot clicked leads into a standalone CSV file:
+    uploads/engaged_hot_leads.csv
+    This file is immediately visible under Lead Files & Lists for 1-click re-engagement campaigns!
+    """
+    try:
+        os.makedirs(UPLOADS_DIR, exist_ok=True)
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT email, click_count, first_clicked_at, last_clicked_at, ip_address FROM clicks ORDER BY click_count DESC, last_clicked_at DESC")
+        rows = cursor.fetchall()
+        conn.close()
+
+        with open(ENGAGED_LEADS_PATH, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(["Email", "Total Clicks", "First Clicked", "Last Clicked", "IP Address", "Status"])
+            for r in rows:
+                writer.writerow([r["email"], r["click_count"], r["first_clicked_at"], r["last_clicked_at"], r["ip_address"] or "", "HOT_LEAD"])
+    except Exception as e:
+        print(f"[ENGAGED LEADS SYNC ERROR] {e}")
+
 def record_click(email, ip="", user_agent=""):
     if not email:
         return 0
@@ -314,6 +339,10 @@ def record_click(email, ip="", user_agent=""):
     conn.commit()
     conn.close()
     log_event(f"🎯 LINK CLICKED: {email} (Total clicks: {new_count})", level="SUCCESS", recipient=email)
+    
+    # Automatically sync clicked lead into standalone CSV file
+    sync_engaged_leads_file()
+    
     return new_count
 
 EXCLUDED_STAFF_EMAILS = {
@@ -479,9 +508,9 @@ def process_spintax(text):
 
 def wrap_tracking_links(content, recipient_email, tracking_base_url=None, target_url="https://winningheaven.com"):
     """
-    Ensures email links ALWAYS work 100% reliably for all recipients on mobile & desktop.
-    If tracking_base_url is a public server/domain, wraps via /r?e=email&dest=...
-    Otherwise, links lead directly to https://winningheaven.com/?utm_source=email_campaign&lead=email
+    Ensures email links & CTA buttons ALWAYS track clicks for every recipient on mobile & desktop.
+    Wraps links via: {base_url}/r?e={encoded_email}&dest={encoded_dest}
+    When recipient clicks, their email is recorded in Engaged Hot Leads and saved to uploads/engaged_hot_leads.csv.
     """
     if not content:
         return ""
@@ -490,30 +519,44 @@ def wrap_tracking_links(content, recipient_email, tracking_base_url=None, target
     encoded_email = urllib.parse.quote(clean_email)
     
     base_url = (tracking_base_url or "").strip().rstrip('/')
-    
-    is_public_tracking = (
-        bool(base_url) and 
-        base_url.startswith("http") and 
-        "127.0.0.1" not in base_url and 
-        "localhost" not in base_url and
-        "0.0.0.0" not in base_url
-    )
+    if not base_url or "127.0.0.1" in base_url or "localhost" in base_url or "0.0.0.0" in base_url:
+        try:
+            cfg = load_config()
+            cfg_url = (cfg.get("tracking_base_url") or "").strip().rstrip('/')
+            if cfg_url and "127.0.0.1" not in cfg_url and "localhost" not in cfg_url:
+                base_url = cfg_url
+            else:
+                base_url = "https://tool.winningheaven.com"
+        except Exception:
+            base_url = "https://tool.winningheaven.com"
 
-    if is_public_tracking:
-        def link_replacer(match):
-            orig_link = match.group(0)
-            if "/r?e=" in orig_link or "/api/track" in orig_link:
-                return orig_link
-            encoded_dest = urllib.parse.quote(orig_link)
-            return f"{base_url}/r?e={encoded_email}&dest={encoded_dest}"
-    else:
-        # Keep clean, pure direct URLs to avoid triggering spam/promotions classifiers
-        def link_replacer(match):
-            return match.group(0)
+    default_dest = (target_url or "https://winningheaven.com").strip()
+    encoded_default_dest = urllib.parse.quote(default_dest)
+    default_track_link = f"{base_url}/r?e={encoded_email}&dest={encoded_default_dest}"
 
+    def link_replacer(match):
+        orig_link = match.group(0)
+        if "/r?e=" in orig_link or "/api/track" in orig_link:
+            return orig_link
+        encoded_dest = urllib.parse.quote(orig_link)
+        return f"{base_url}/r?e={encoded_email}&dest={encoded_dest}"
+
+    # 1. Wrap all winningheaven.com links & buttons
     pattern = r'https?://(?:www\.)?winningheaven\.com[^\s\'"<>]*'
     wrapped = re.sub(pattern, link_replacer, content, flags=re.IGNORECASE)
 
+    # 2. Replace dynamic button & CTA placeholders
+    placeholders = [
+        "{track_link}", "{{track_link}}",
+        "{cta_link}", "{{cta_link}}",
+        "{cta_url}", "{{cta_url}}",
+        "{button_link}", "{{button_link}}",
+        "{click_url}", "{{click_url}}"
+    ]
+    for ph in placeholders:
+        wrapped = wrapped.replace(ph, default_track_link)
+
+    # 3. Replace {email} placeholders
     wrapped = wrapped.replace("{email}", clean_email).replace("{{email}}", clean_email)
     return wrapped
 

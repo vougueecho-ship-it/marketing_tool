@@ -11,7 +11,7 @@ from mailer import (
     manager, load_config, save_config, load_file_recipients, 
     get_available_lead_files, get_db, log_event, record_click,
     get_sender_accounts, add_sender_account, update_sender_account, delete_sender_account,
-    parse_emails_from_file, UPLOADS_DIR
+    parse_emails_from_file, UPLOADS_DIR, sync_engaged_leads_file
 )
 from templates_data import TEMPLATES, generate_custom_template, add_custom_template
 from verifier import verifier_engine, verify_single_email
@@ -21,6 +21,12 @@ from warmup_engine import (
     test_warmup_credentials, get_warmup_stats, get_all_warmup_accounts,
     get_warmup_logs
 )
+
+# Ensure engaged hot leads standalone file is synced on startup
+try:
+    sync_engaged_leads_file()
+except Exception:
+    pass
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "winningheaven_vip_marketing_secret_key_2026_xyz")
