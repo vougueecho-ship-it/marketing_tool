@@ -3,3 +3,9 @@ __pycache__/
 *.pyo
 .DS_Store
 app.log
+campaign_data.db
+*.db
+*.sqlite
+*.sqlite3
+scratch/
+uploads/engaged_hot_leads.csv
