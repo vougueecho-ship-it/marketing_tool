@@ -1,0 +1,17 @@
+[Unit]
+Description=Winning Heaven Email Marketing & Automation Tool
+After=network.target
+
+[Service]
+User=root
+WorkingDirectory=/var/www/tool.winningheaven.com
+# Use the virtualenv's gunicorn or python
+ExecStart=/var/www/tool.winningheaven.com/venv/bin/gunicorn --workers 1 --threads 4 --bind 127.0.0.1:5050 --timeout 300 app:app
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/www/tool.winningheaven.com/app.log
+StandardError=append:/var/www/tool.winningheaven.com/app.log
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

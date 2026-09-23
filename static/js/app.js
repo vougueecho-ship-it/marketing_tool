@@ -101,6 +101,43 @@ document.addEventListener('DOMContentLoaded', () => {
   const liveConsole = document.getElementById('live-console');
   const btnClearLogsView = document.getElementById('btn-clear-logs-view');
 
+  // DOM Elements - Modern Layout & Mobile Sidebar
+  const appSidebar = document.getElementById('app-sidebar');
+  const sidebarBackdrop = document.getElementById('sidebar-backdrop');
+  const btnMobileToggle = document.getElementById('btn-mobile-sidebar-toggle');
+  const activeViewTitle = document.getElementById('active-view-title');
+  const btnSidebarLimitModal = document.getElementById('btn-sidebar-limit-modal');
+
+  const tabTitles = {
+    'tab-control': '<i class="fa-solid fa-rocket text-primary"></i> <span>1-Click Campaign Dispatcher</span>',
+    'tab-cleaner': '<i class="fa-solid fa-broom text-primary"></i> <span>Deep Email Verifier &amp; Cleaner</span>',
+    'tab-files': '<i class="fa-solid fa-folder-tree text-primary"></i> <span>Lead Files &amp; Queue Manager</span>',
+    'tab-templates': '<i class="fa-solid fa-layer-group text-primary"></i> <span>Drip Sequences &amp; AI Generator</span>',
+    'tab-recipients': '<i class="fa-solid fa-list-check text-primary"></i> <span>Recipients Queue &amp; Status</span>',
+    'tab-clicks': '<i class="fa-solid fa-fire text-warning"></i> <span>Engaged Leads &amp; Clicks Tracker</span>',
+    'tab-senders': '<i class="fa-solid fa-at text-primary"></i> <span>Sender Emails &amp; Account Rotation</span>',
+    'tab-settings': '<i class="fa-solid fa-sliders text-primary"></i> <span>SMTP &amp; Anti-Spam Settings</span>',
+    'tab-logs': '<i class="fa-solid fa-terminal text-primary"></i> <span>Live Dispatch Console Stream</span>'
+  };
+
+  if (btnMobileToggle && appSidebar && sidebarBackdrop) {
+    btnMobileToggle.addEventListener('click', () => {
+      appSidebar.classList.toggle('open');
+      sidebarBackdrop.classList.toggle('active');
+    });
+    sidebarBackdrop.addEventListener('click', () => {
+      appSidebar.classList.remove('open');
+      sidebarBackdrop.classList.remove('active');
+    });
+  }
+
+  if (btnSidebarLimitModal) {
+    btnSidebarLimitModal.addEventListener('click', () => {
+      const btnOpenLimit = document.getElementById('btn-open-limit-modal');
+      if (btnOpenLimit) btnOpenLimit.click();
+    });
+  }
+
   // ==================== 1. TAB NAVIGATION ====================
   tabButtons.forEach(btn => {
     btn.addEventListener('click', () => {
@@ -108,7 +145,17 @@ document.addEventListener('DOMContentLoaded', () => {
       tabPanes.forEach(p => p.classList.remove('active'));
       btn.classList.add('active');
       const targetId = btn.getAttribute('data-tab');
-      document.getElementById(targetId).classList.add('active');
+      const targetPane = document.getElementById(targetId);
+      if (targetPane) targetPane.classList.add('active');
+
+      if (activeViewTitle && tabTitles[targetId]) {
+        activeViewTitle.innerHTML = tabTitles[targetId];
+      }
+
+      if (appSidebar && sidebarBackdrop) {
+        appSidebar.classList.remove('open');
+        sidebarBackdrop.classList.remove('active');
+      }
 
       if (targetId === 'tab-recipients') {
         loadRecipients();
@@ -660,6 +707,16 @@ document.addEventListener('DOMContentLoaded', () => {
       if (statDailyLimit) statDailyLimit.textContent = Number(data.daily_limit || 850).toLocaleString();
       if (tabClicksCount) tabClicksCount.textContent = Number(data.unique_clicks || 0).toLocaleString();
       if (tabRecCount) tabRecCount.textContent = Number(data.total || 0).toLocaleString();
+
+      const todaySentNum = Number(data.today_sent || 0);
+      const dailyLimitNum = Number(data.daily_limit || 850);
+      const quotaPct = dailyLimitNum > 0 ? Math.min(100, Math.round((todaySentNum / dailyLimitNum) * 100)) : 0;
+      const sidebarQuotaBar = document.getElementById('sidebar-quota-bar');
+      const sidebarQuotaSent = document.getElementById('sidebar-quota-sent');
+      const sidebarQuotaLimit = document.getElementById('sidebar-quota-limit');
+      if (sidebarQuotaBar) sidebarQuotaBar.style.width = `${quotaPct}%`;
+      if (sidebarQuotaSent) sidebarQuotaSent.textContent = todaySentNum.toLocaleString();
+      if (sidebarQuotaLimit) sidebarQuotaLimit.textContent = dailyLimitNum.toLocaleString();
 
       const pct = data.total > 0 ? Math.round(((data.sent + (data.failed || 0)) / data.total) * 100) : 0;
       if (progressPercentage) progressPercentage.textContent = `${pct}% (${data.sent}/${data.total} Sent)`;

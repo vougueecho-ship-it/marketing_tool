@@ -15,5 +15,11 @@
   "target_url": "https://winningheaven.com",
   "excel_file": "zeeshan_2.csv",
   "active_file": "Companies_Clean_Leads.xlsx",
-  "file_queue": []
+  "file_queue": [
+    "client sheet.xlsx",
+    "anees_filters.csv",
+    "zeeshan_emails.csv",
+    "anees_emails.csv",
+    "zeeshan_2.csv"
+  ]
 }

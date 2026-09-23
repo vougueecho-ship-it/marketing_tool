@@ -5,7 +5,7 @@ import csv
 import re
 import io
 import urllib.parse
-from flask import Flask, render_template, request, jsonify, Response, redirect
+from flask import Flask, render_template, request, jsonify, Response, redirect, session, url_for
 from werkzeug.utils import secure_filename
 from mailer import (
     manager, load_config, save_config, load_file_recipients, 
@@ -17,11 +17,74 @@ from templates_data import TEMPLATES, generate_custom_template, add_custom_templ
 from verifier import verifier_engine, verify_single_email
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "winningheaven_vip_marketing_secret_key_2026_xyz")
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50 MB max file upload
+app.config['PERMANENT_SESSION_LIFETIME'] = 30 * 24 * 3600  # 30 days
+
+# ==================== HARDCODED ADMIN CREDENTIALS ====================
+# You can login with any of these usernames:
+ADMIN_CREDENTIALS = {
+    "admin": "WinningHeaven@2026",
+    "winningheaven": "WinningHeaven@2026",
+    "verified@winningheaven.com": "WinningHeaven@2026"
+}
+
+@app.before_request
+def require_login():
+    # Public routes that NEVER require authentication
+    public_routes = [
+        '/login',
+        '/logout',
+        '/r',               # Email recipient click tracking redirect
+        '/api/track-click', # Click tracking webhook
+        '/favicon.ico'
+    ]
+    if request.path in public_routes:
+        return None
+    if request.path.startswith('/static/'):
+        return None
+        
+    if not session.get("logged_in"):
+        if request.path.startswith('/api/'):
+            return jsonify({"success": False, "error": "Unauthorized. Please log in first."}), 401
+        return redirect("/login")
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if session.get("logged_in"):
+        return redirect("/")
+    
+    error = None
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "").strip()
+        remember = request.form.get("remember")
+        
+        # Check against configured credentials (case-insensitive username)
+        matched = False
+        for user, pwd in ADMIN_CREDENTIALS.items():
+            if username.lower() == user.lower() and password == pwd:
+                matched = True
+                break
+        
+        if matched:
+            session.permanent = bool(remember)
+            session["logged_in"] = True
+            session["user"] = username
+            return redirect("/")
+        else:
+            error = "Incorrect username or password. Please try again."
+            
+    return render_template("login.html", error=error)
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect("/login")
 
 @app.route("/")
 def index():
-    return render_template("index.html", v=int(time.time()))
+    return render_template("index.html", v=int(time.time()), current_user=session.get("user", "admin"))
 
 @app.after_request
 def add_header(response):
