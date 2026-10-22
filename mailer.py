@@ -18,6 +18,8 @@ from email.header import Header
 import openpyxl
 import csv
 
+logger = logging.getLogger(__name__)
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOADS_DIR = os.path.join(BASE_DIR, "uploads")
 DB_PATH = os.path.join(BASE_DIR, "campaign_data.db")
@@ -45,10 +47,14 @@ def save_campaign_state(state_dict):
 os.makedirs(UPLOADS_DIR, exist_ok=True)
 
 def load_config():
+    cfg = {}
     if os.path.exists(CONFIG_PATH):
-        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {
+        try:
+            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+        except Exception:
+            cfg = {}
+    defaults = {
         "smtp_host": "smtp.hostinger.com",
         "smtp_port": 465,
         "use_ssl": True,
@@ -61,10 +67,17 @@ def load_config():
         "max_delay_seconds": 6,
         "batch_size": 50,
         "batch_pause_seconds": 60,
+        "daily_limit": 10000,
         "target_url": "https://winningheaven.com",
         "excel_file": "client sheet.xlsx",
-        "active_template_id": "day1_morning_welcome"
+        "active_template_id": "day1_morning_welcome",
+        "daily_bonus": "$5 Freeplay",
+        "min_cashout": "$35"
     }
+    for k, v in defaults.items():
+        if k not in cfg:
+            cfg[k] = v
+    return cfg
 
 def save_config(cfg):
     with open(CONFIG_PATH, "w", encoding="utf-8") as f:
@@ -457,7 +470,7 @@ def get_available_lead_files():
     for ext in ["*.xlsx", "*.xls", "*.csv", "*.txt"]:
         for fpath in glob.glob(os.path.join(BASE_DIR, ext)):
             fname = os.path.basename(fpath)
-            if fname not in ["package.json", "package-lock.json"]:
+            if fname not in ["package.json", "package-lock.json", "requirements.txt"]:
                 files_map[fname] = fpath
                 
     # Check uploads folder
@@ -503,6 +516,20 @@ def get_available_lead_files():
         
     conn.close()
     return results
+
+def render_template_vars(text, bonus="$5 Freeplay", min_cashout="$35"):
+    """
+    Safely substitutes {daily_bonus}, {bonus}, {freeplay}, {min_cashout}, {cashout}
+    with actual user-configured values using lambda replacers to protect dollar signs ($).
+    """
+    if not text or not isinstance(text, str):
+        return text
+    b_val = str(bonus or "$5 Freeplay").strip()
+    c_val = str(min_cashout or "$35").strip()
+    text = re.sub(r'\{{1,2}(?:daily_)?bonus\}{1,2}', lambda m: b_val, text, flags=re.IGNORECASE)
+    text = re.sub(r'\{{1,2}freeplay(?:_amount)?\}{1,2}', lambda m: b_val, text, flags=re.IGNORECASE)
+    text = re.sub(r'\{{1,2}(?:min(?:imum)?_)?cashout\}{1,2}', lambda m: c_val, text, flags=re.IGNORECASE)
+    return text
 
 def process_spintax(text):
     """
@@ -875,7 +902,14 @@ class EmailMarketingManager:
         cfg = load_config()
         tracking_url = cfg.get("tracking_base_url", "")
         target_url = cfg.get("target_url", "https://winningheaven.com")
+        daily_bonus = cfg.get("daily_bonus", "$5 Freeplay")
+        min_cashout = cfg.get("min_cashout", "$35")
         
+        # Render user-configured daily bonus & min cashout variables
+        subject = render_template_vars(subject, daily_bonus, min_cashout)
+        html_body = render_template_vars(html_body, daily_bonus, min_cashout)
+        plain_body = render_template_vars(plain_body, daily_bonus, min_cashout)
+
         # Apply Spintax rotation & tracking link wrapping
         final_subject = process_spintax(subject)
         final_html = process_spintax(html_body)
@@ -1156,10 +1190,18 @@ class EmailMarketingManager:
                 from_addr = current_acc["sender_email"]
                 reply_to = current_acc.get("reply_to") or from_addr
                 
+                daily_bonus = cfg.get("daily_bonus", "$5 Freeplay")
+                min_cashout = cfg.get("min_cashout", "$35")
+
+                # Render user-configured daily bonus & min cashout variables per email
+                subj_rendered = render_template_vars(self.current_subject, daily_bonus, min_cashout)
+                html_rendered = render_template_vars(self.current_html, daily_bonus, min_cashout)
+                plain_rendered = render_template_vars(self.current_plain, daily_bonus, min_cashout)
+
                 # Apply Dynamic Spintax rotation & tracking links per recipient
-                final_subject = process_spintax(self.current_subject)
-                final_html = process_spintax(self.current_html)
-                final_plain = process_spintax(self.current_plain)
+                final_subject = process_spintax(subj_rendered)
+                final_html = process_spintax(html_rendered)
+                final_plain = process_spintax(plain_rendered)
 
                 html_body = wrap_tracking_links(final_html, to_email, tracking_url, target_url)
                 plain_body = wrap_tracking_links(final_plain, to_email, tracking_url, target_url)

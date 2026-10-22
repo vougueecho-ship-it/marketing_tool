@@ -1735,3 +1735,46 @@ body {
   transition: width 0.3s ease;
 }
 
+/* ==============================================================================
+   DAILY BONUS & CASHOUT OFFER MANAGER
+   ============================================================================== */
+.offer-manager-card {
+  margin-bottom: 20px;
+  border-left: 4px solid #f59e0b;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.05) 0%, #ffffff 60%);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+}
+
+.preset-chips-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.btn-chip {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+  padding: 5px 11px;
+  border-radius: 20px;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.btn-chip:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+.btn-chip.active {
+  background: linear-gradient(135deg, #090d16 0%, #171d2d 100%);
+  border-color: #090d16;
+  color: #fbbf24;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+

@@ -21,5 +21,8 @@
     "zeeshan_emails.csv",
     "anees_emails.csv",
     "zeeshan_2.csv"
-  ]
+  ],
+  "daily_bonus": "$5 Freeplay",
+  "min_cashout": "$35",
+  "active_template_id": "day1_morning_welcome"
 }

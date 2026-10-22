@@ -579,6 +579,142 @@ document.addEventListener('DOMContentLoaded', () => {
     doc.close();
   }
 
+  // ==================== DAILY BONUS & CASHOUT OFFER MANAGER ====================
+  const ctrlDailyBonus = document.getElementById('ctrl-daily-bonus');
+  const ctrlMinCashout = document.getElementById('ctrl-min-cashout');
+  const btnSaveOffer = document.getElementById('btn-save-offer');
+  const offerSaveMsg = document.getElementById('offer-save-msg');
+  const lblActiveBonus = document.getElementById('lbl-active-bonus');
+  const lblActiveCashout = document.getElementById('lbl-active-cashout');
+
+  // Bonus Preset Chips Click Handlers
+  document.querySelectorAll('.bonus-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      document.querySelectorAll('.bonus-chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      if (ctrlDailyBonus) {
+        ctrlDailyBonus.value = chip.getAttribute('data-val');
+      }
+    });
+  });
+
+  // Cashout Preset Chips Click Handlers
+  document.querySelectorAll('.cashout-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      document.querySelectorAll('.cashout-chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      if (ctrlMinCashout) {
+        ctrlMinCashout.value = chip.getAttribute('data-val');
+      }
+    });
+  });
+
+  // Synchronize active chips with input values
+  function syncActiveChips(bonusVal, cashoutVal) {
+    if (bonusVal) {
+      document.querySelectorAll('.bonus-chip').forEach(chip => {
+        if (chip.getAttribute('data-val').trim().toLowerCase() === bonusVal.trim().toLowerCase()) {
+          chip.classList.add('active');
+        } else {
+          chip.classList.remove('active');
+        }
+      });
+    }
+    if (cashoutVal) {
+      document.querySelectorAll('.cashout-chip').forEach(chip => {
+        if (chip.getAttribute('data-val').trim().toLowerCase() === cashoutVal.trim().toLowerCase()) {
+          chip.classList.add('active');
+        } else {
+          chip.classList.remove('active');
+        }
+      });
+    }
+  }
+
+  // Load Active Offer from Configuration
+  async function loadActiveOffer() {
+    try {
+      const res = await fetch('/api/config');
+      const cfg = await res.json();
+      const bonus = cfg.daily_bonus || '$5 Freeplay';
+      const cashout = cfg.min_cashout || '$35';
+
+      if (ctrlDailyBonus) ctrlDailyBonus.value = bonus;
+      if (ctrlMinCashout) ctrlMinCashout.value = cashout;
+      if (lblActiveBonus) lblActiveBonus.textContent = bonus;
+      if (lblActiveCashout) lblActiveCashout.textContent = cashout;
+
+      const cfgBonus = document.getElementById('cfg-daily-bonus');
+      const cfgCashout = document.getElementById('cfg-min-cashout');
+      if (cfgBonus) cfgBonus.value = bonus;
+      if (cfgCashout) cfgCashout.value = cashout;
+
+      syncActiveChips(bonus, cashout);
+    } catch (err) {
+      console.error('Error loading active offer:', err);
+    }
+  }
+
+  // Save & Apply Offer to all 16 templates instantly
+  if (btnSaveOffer) {
+    btnSaveOffer.addEventListener('click', async () => {
+      const bonus = ctrlDailyBonus ? ctrlDailyBonus.value.trim() : '$5 Freeplay';
+      const cashout = ctrlMinCashout ? ctrlMinCashout.value.trim() : '$35';
+
+      if (!bonus || !cashout) {
+        alert('Please specify both a Bonus offer and a Minimum Cashout amount.');
+        return;
+      }
+
+      btnSaveOffer.disabled = true;
+      try {
+        const res = await fetch('/api/config/offer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ daily_bonus: bonus, min_cashout: cashout })
+        });
+        const data = await res.json();
+        if (data.success) {
+          if (lblActiveBonus) lblActiveBonus.textContent = data.daily_bonus;
+          if (lblActiveCashout) lblActiveCashout.textContent = data.min_cashout;
+          syncActiveChips(data.daily_bonus, data.min_cashout);
+
+          const cfgBonus = document.getElementById('cfg-daily-bonus');
+          const cfgCashout = document.getElementById('cfg-min-cashout');
+          if (cfgBonus) cfgBonus.value = data.daily_bonus;
+          if (cfgCashout) cfgCashout.value = data.min_cashout;
+
+          // Re-render templates list and active editor with new offer
+          if (data.templates && data.templates.length > 0) {
+            templates = data.templates;
+            templateSelectorControl.innerHTML = '';
+            templateDropdown.innerHTML = '';
+            templates.forEach((tpl) => {
+              const opt1 = new Option(tpl.name, tpl.id);
+              const opt2 = new Option(tpl.name, tpl.id);
+              templateSelectorControl.add(opt1);
+              templateDropdown.add(opt2);
+            });
+
+            const currentId = currentTemplate ? currentTemplate.id : templates[0].id;
+            selectTemplate(currentId);
+          }
+
+          if (offerSaveMsg) {
+            offerSaveMsg.style.display = 'inline-block';
+            setTimeout(() => { offerSaveMsg.style.display = 'none'; }, 4000);
+          }
+        } else {
+          alert('Failed to update offer: ' + (data.error || 'Unknown error'));
+        }
+      } catch (err) {
+        alert('Error updating offer: ' + err.message);
+      } finally {
+        btnSaveOffer.disabled = false;
+      }
+    });
+  }
+
   // ==================== SMART AI EMAIL TEMPLATE GENERATOR ====================
   const aiPromptInput = document.getElementById('ai-prompt-input');
   const aiToneSelect = document.getElementById('ai-tone-select');
@@ -1110,6 +1246,12 @@ document.addEventListener('DOMContentLoaded', () => {
       if (document.getElementById('cfg-daily-limit')) {
         document.getElementById('cfg-daily-limit').value = cfg.daily_limit || 850;
       }
+      if (document.getElementById('cfg-daily-bonus')) {
+        document.getElementById('cfg-daily-bonus').value = cfg.daily_bonus || '$5 Freeplay';
+      }
+      if (document.getElementById('cfg-min-cashout')) {
+        document.getElementById('cfg-min-cashout').value = cfg.min_cashout || '$35';
+      }
     } catch (err) {
       console.error('Failed to load settings:', err);
     }
@@ -1129,7 +1271,9 @@ document.addEventListener('DOMContentLoaded', () => {
       max_delay_seconds: parseFloat(document.getElementById('cfg-max-delay').value),
       batch_size: parseInt(document.getElementById('cfg-batch-size').value, 10),
       batch_pause_seconds: parseFloat(document.getElementById('cfg-batch-pause').value),
-      daily_limit: parseInt(document.getElementById('cfg-daily-limit').value, 10) || 850
+      daily_limit: parseInt(document.getElementById('cfg-daily-limit').value, 10) || 850,
+      daily_bonus: document.getElementById('cfg-daily-bonus') ? document.getElementById('cfg-daily-bonus').value.trim() : undefined,
+      min_cashout: document.getElementById('cfg-min-cashout') ? document.getElementById('cfg-min-cashout').value.trim() : undefined
     };
 
     try {
@@ -1142,6 +1286,14 @@ document.addEventListener('DOMContentLoaded', () => {
       if (data.success) {
         saveCfgMsg.style.display = 'inline';
         setTimeout(() => { saveCfgMsg.style.display = 'none'; }, 3000);
+        
+        // Sync offer controls with updated settings
+        if (payload.daily_bonus && ctrlDailyBonus) ctrlDailyBonus.value = payload.daily_bonus;
+        if (payload.min_cashout && ctrlMinCashout) ctrlMinCashout.value = payload.min_cashout;
+        if (payload.daily_bonus && lblActiveBonus) lblActiveBonus.textContent = payload.daily_bonus;
+        if (payload.min_cashout && lblActiveCashout) lblActiveCashout.textContent = payload.min_cashout;
+        syncActiveChips(payload.daily_bonus || '', payload.min_cashout || '');
+        await loadTemplates();
       }
     } catch (err) {
       alert('Error saving settings: ' + err.message);
@@ -2727,6 +2879,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ==================== INITIALIZATION ====================
+  loadActiveOffer();
   loadFiles();
   loadTemplates();
   loadSettings();

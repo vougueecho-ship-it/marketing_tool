@@ -270,6 +270,93 @@
 
         <!-- ==================== TAB 1: CAMPAIGN CONTROL ==================== -->
         <div id="tab-control" class="tab-pane active">
+
+          <!-- ==================== DAILY PROMO & CASHOUT OFFER MANAGER ==================== -->
+          <div class="card offer-manager-card">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; margin-bottom: 14px;">
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <div style="width: 44px; height: 44px; border-radius: 10px; background: rgba(245, 158, 11, 0.15); display: flex; align-items: center; justify-content: center; color: #f59e0b; font-size: 20px;">
+                  <i class="fa-solid fa-gift"></i>
+                </div>
+                <div>
+                  <h2 style="margin: 0; font-size: 17px; font-weight: 800; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+                    Daily Bonus &amp; Cashout Offer Manager
+                    <span class="badge" style="background: rgba(16, 185, 129, 0.12); color: #059669; border: 1px solid rgba(16, 185, 129, 0.25); font-size: 11px;">
+                      <i class="fa-solid fa-bolt"></i> Auto-Syncs All 16 Templates
+                    </span>
+                  </h2>
+                  <p style="margin: 3px 0 0; font-size: 13px; color: var(--text-secondary);">
+                    Set today's promotional bonus &amp; minimum cashout. All email subjects, copy, bullet points, and buttons update automatically.
+                  </p>
+                </div>
+              </div>
+
+              <!-- Active Status Badge -->
+              <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 30px; padding: 6px 16px; display: flex; align-items: center; gap: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.04);">
+                <span style="font-size: 11.5px; color: var(--text-muted); font-weight: 700;">CURRENT OFFER:</span>
+                <span id="active-offer-badge" style="font-size: 13.5px; font-weight: 800; color: #d97706;">
+                  🎁 <span id="lbl-active-bonus">$5 Freeplay</span> &bull; ⚡ <span id="lbl-active-cashout">$35</span> Min Cashout
+                </span>
+              </div>
+            </div>
+
+            <!-- 2-Column Controls Grid -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 10px;">
+              <!-- Left: Bonus Setting -->
+              <div style="background: var(--bg-card-subtle); padding: 14px 16px; border-radius: var(--radius-md); border: 1px solid var(--border-light);">
+                <label style="font-size: 12.5px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; display: flex; justify-content: space-between;">
+                  <span><i class="fa-solid fa-gift text-warning"></i> Daily Freeplay / Bonus Offer:</span>
+                  <span style="font-size: 11px; color: var(--text-muted);">Quick Presets or Custom</span>
+                </label>
+                <div style="margin-bottom: 8px;">
+                  <input type="text" id="ctrl-daily-bonus" class="form-input" placeholder="e.g. $5 Freeplay or 100% Match" value="$5 Freeplay" style="font-weight: 700;">
+                </div>
+                <div class="preset-chips-container" id="bonus-chips-group">
+                  <button type="button" class="btn-chip bonus-chip" data-val="$3 Freeplay">$3 Freeplay</button>
+                  <button type="button" class="btn-chip bonus-chip active" data-val="$5 Freeplay">$5 Freeplay</button>
+                  <button type="button" class="btn-chip bonus-chip" data-val="$10 Freeplay">$10 Freeplay</button>
+                  <button type="button" class="btn-chip bonus-chip" data-val="$15 Freeplay">$15 Freeplay</button>
+                  <button type="button" class="btn-chip bonus-chip" data-val="$20 Freeplay">$20 Freeplay</button>
+                  <button type="button" class="btn-chip bonus-chip" data-val="100% Match Bonus">100% Match</button>
+                </div>
+              </div>
+
+              <!-- Right: Min Cashout Setting -->
+              <div style="background: var(--bg-card-subtle); padding: 14px 16px; border-radius: var(--radius-md); border: 1px solid var(--border-light);">
+                <label style="font-size: 12.5px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; display: flex; justify-content: space-between;">
+                  <span><i class="fa-solid fa-money-bill-wave text-success"></i> Minimum Cashout Threshold:</span>
+                  <span style="font-size: 11px; color: var(--text-muted);">Quick Presets or Custom</span>
+                </label>
+                <div style="margin-bottom: 8px;">
+                  <input type="text" id="ctrl-min-cashout" class="form-input" placeholder="e.g. $35" value="$35" style="font-weight: 700;">
+                </div>
+                <div class="preset-chips-container" id="cashout-chips-group">
+                  <button type="button" class="btn-chip cashout-chip" data-val="$20">$20 Min</button>
+                  <button type="button" class="btn-chip cashout-chip" data-val="$25">$25 Min</button>
+                  <button type="button" class="btn-chip cashout-chip" data-val="$30">$30 Min</button>
+                  <button type="button" class="btn-chip cashout-chip active" data-val="$35">$35 Min</button>
+                  <button type="button" class="btn-chip cashout-chip" data-val="$40">$40 Min</button>
+                  <button type="button" class="btn-chip cashout-chip" data-val="$50">$50 Min</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Save & Sync Action Bar -->
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border-light);">
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <button type="button" id="btn-save-offer" class="btn btn-primary" style="font-weight: 700;">
+                  <i class="fa-solid fa-arrows-rotate"></i> Update Offer &amp; Re-Render Templates
+                </button>
+                <span id="offer-save-msg" style="display: none; font-size: 13px; font-weight: 600; color: #059669;">
+                  <i class="fa-solid fa-circle-check"></i> Offer saved and applied to all templates!
+                </span>
+              </div>
+              <span style="font-size: 12px; color: var(--text-muted);">
+                <i class="fa-solid fa-shield-halved text-primary"></i> Applies immediately to campaign dispatcher &amp; test emails.
+              </span>
+            </div>
+          </div>
+
           <div class="control-grid">
             
             <!-- Left: Quick Actions & Test Sender -->
@@ -1271,6 +1358,24 @@
                 <small style="color: var(--text-muted); display: block; margin-top: 4px;">
                   Email links are automatically converted to <code>TRACKING_URL/r?e=user@email.com&amp;dest=...</code> to record button clicks.
                 </small>
+              </div>
+
+              <hr class="divider">
+
+              <div class="card-title">
+                <i class="fa-solid fa-gift text-primary"></i>
+                <h3>Default Promotional Offer &amp; Cashout</h3>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group flex-1">
+                  <label>Daily Freeplay / Bonus Offer:</label>
+                  <input type="text" id="cfg-daily-bonus" class="form-input" value="$5 Freeplay">
+                </div>
+                <div class="form-group flex-1">
+                  <label>Minimum Cashout Threshold:</label>
+                  <input type="text" id="cfg-min-cashout" class="form-input" value="$35">
+                </div>
               </div>
 
               <hr class="divider">

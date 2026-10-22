@@ -13,7 +13,10 @@ from mailer import (
     get_sender_accounts, add_sender_account, update_sender_account, delete_sender_account,
     parse_emails_from_file, UPLOADS_DIR, sync_engaged_leads_file
 )
-from templates_data import TEMPLATES, generate_custom_template, add_custom_template
+from templates_data import (
+    TEMPLATES, generate_custom_template, add_custom_template,
+    get_templates as get_all_templates_rendered, render_template_dict
+)
 from verifier import verifier_engine, verify_single_email
 from warmup_engine import (
     warmup_manager, add_warmup_account, bulk_add_warmup_accounts,
@@ -262,7 +265,10 @@ def get_clicks():
 
 @app.route("/api/templates", methods=["GET"])
 def get_templates():
-    return jsonify(TEMPLATES)
+    cfg = load_config()
+    bonus = cfg.get("daily_bonus", "$5 Freeplay")
+    min_cashout = cfg.get("min_cashout", "$35")
+    return jsonify(get_all_templates_rendered(bonus=bonus, min_cashout=min_cashout))
 
 @app.route("/api/templates/generate", methods=["POST"])
 def generate_template_api():
@@ -271,10 +277,14 @@ def generate_template_api():
     tone = data.get("tone", "vip").strip()
     offer_headline = data.get("offer_headline", "").strip()
     
+    cfg = load_config()
+    bonus = data.get("daily_bonus") or cfg.get("daily_bonus", "$5 Freeplay")
+    min_cashout = data.get("min_cashout") or cfg.get("min_cashout", "$35")
+    
     if not prompt:
         return jsonify({"success": False, "error": "Please type a short description of what you want your email to say."}), 400
         
-    tpl = generate_custom_template(prompt, tone=tone, offer_headline=offer_headline)
+    tpl = generate_custom_template(prompt, tone=tone, offer_headline=offer_headline, bonus=bonus, min_cashout=min_cashout)
     return jsonify({"success": True, "template": tpl})
 
 @app.route("/api/templates/save", methods=["POST"])
@@ -577,13 +587,37 @@ def manage_config():
     if request.method == "POST":
         data = request.json or {}
         cfg = load_config()
-        for k in ["smtp_host", "smtp_port", "sender_email", "sender_password", "sender_name", "reply_to", "tracking_base_url", "min_delay_seconds", "max_delay_seconds", "batch_size", "batch_pause_seconds", "daily_limit", "excel_file"]:
+        for k in ["smtp_host", "smtp_port", "sender_email", "sender_password", "sender_name", "reply_to", "tracking_base_url", "min_delay_seconds", "max_delay_seconds", "batch_size", "batch_pause_seconds", "daily_limit", "excel_file", "daily_bonus", "min_cashout"]:
             if k in data:
                 cfg[k] = data[k]
         save_config(cfg)
         log_event("Settings updated successfully.")
         return jsonify({"success": True, "config": cfg})
     return jsonify(load_config())
+
+@app.route("/api/config/offer", methods=["POST"])
+def update_campaign_offer():
+    data = request.json or {}
+    bonus = data.get("daily_bonus", "").strip()
+    cashout = data.get("min_cashout", "").strip()
+    
+    cfg = load_config()
+    if bonus:
+        cfg["daily_bonus"] = bonus
+    if cashout:
+        cfg["min_cashout"] = cashout
+        
+    save_config(cfg)
+    log_event(f"🎁 Active Offer Updated: Bonus = '{cfg.get('daily_bonus')}' | Min Cashout = '{cfg.get('min_cashout')}'", level="SUCCESS")
+    
+    rendered = get_all_templates_rendered(bonus=cfg.get("daily_bonus"), min_cashout=cfg.get("min_cashout"))
+    return jsonify({
+        "success": True,
+        "message": f"Daily offer updated to {cfg.get('daily_bonus')} & {cfg.get('min_cashout')} min cashout!",
+        "daily_bonus": cfg.get("daily_bonus"),
+        "min_cashout": cfg.get("min_cashout"),
+        "templates": rendered
+    })
 
 @app.route("/api/senders", methods=["GET"])
 def list_sender_accounts():
