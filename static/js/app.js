@@ -460,6 +460,59 @@ document.addEventListener('DOMContentLoaded', () => {
     return `${Math.round(bytes / 1024)} KB`;
   }
 
+  function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  function renderDripStageCards() {
+    const navContainer = document.getElementById('drip-stages-nav-container') || document.querySelector('.drip-stages-nav');
+    if (!navContainer) return;
+
+    navContainer.innerHTML = '';
+    templates.forEach((tpl) => {
+      let badge = 'STAGE ' + (tpl.stage || 1);
+      const id = tpl.id || '';
+      if (id.startsWith('day')) {
+        const parts = id.split('_');
+        if (parts.length >= 2) {
+          badge = `${parts[0].replace('day', 'DAY ')} ${parts[1].toUpperCase()}`;
+        }
+      } else if (id.includes('flash')) {
+        badge = '🔥 FLASH PROMO';
+      } else if (id.includes('winback')) {
+        badge = '🎯 RE-ACTIVATION';
+      } else if (id.startsWith('custom')) {
+        badge = '✨ AI CUSTOM';
+      }
+
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'stage-card';
+      if (currentTemplate && currentTemplate.id === tpl.id) {
+        card.classList.add('active');
+      }
+      card.setAttribute('data-stage', tpl.id);
+
+      card.innerHTML = `
+        <div class="stage-number">${badge}</div>
+        <h4>${escapeHtml(tpl.name)}</h4>
+        <p>${escapeHtml(tpl.preview_text || 'Primary Inbox Verified')}</p>
+      `;
+
+      card.addEventListener('click', () => {
+        selectTemplate(tpl.id);
+      });
+
+      navContainer.appendChild(card);
+    });
+  }
+
   // ==================== 3. 3-STAGE DRIP TEMPLATES ====================
   async function loadTemplates() {
     try {
@@ -476,8 +529,11 @@ document.addEventListener('DOMContentLoaded', () => {
         templateDropdown.add(opt2);
       });
 
+      renderDripStageCards();
+
       if (templates.length > 0) {
-        selectTemplate(templates[0].id);
+        const targetId = currentTemplate ? currentTemplate.id : templates[0].id;
+        selectTemplate(targetId);
       }
     } catch (err) {
       console.error('Failed to load templates:', err);
@@ -492,10 +548,12 @@ document.addEventListener('DOMContentLoaded', () => {
     templateSelectorControl.value = tpl.id;
     templateDropdown.value = tpl.id;
 
-    // Highlight Drip Stage Card
-    stageCards.forEach(sc => {
+    // Highlight Drip Stage Card dynamically
+    const allCards = document.querySelectorAll('.stage-card');
+    allCards.forEach(sc => {
       if (sc.getAttribute('data-stage') === tpl.id) {
         sc.classList.add('active');
+        sc.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
       } else {
         sc.classList.remove('active');
       }
@@ -508,13 +566,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     updatePreview(tpl.html);
   }
-
-  stageCards.forEach(card => {
-    card.addEventListener('click', () => {
-      const stageId = card.getAttribute('data-stage');
-      selectTemplate(stageId);
-    });
-  });
 
   const btnDeleteTemplate = document.getElementById('btn-delete-template');
   if (btnDeleteTemplate) {
@@ -696,6 +747,7 @@ document.addEventListener('DOMContentLoaded', () => {
               templateDropdown.add(opt2);
             });
 
+            renderDripStageCards();
             const currentId = currentTemplate ? currentTemplate.id : templates[0].id;
             selectTemplate(currentId);
           }
