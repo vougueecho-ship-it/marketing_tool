@@ -1829,3 +1829,92 @@ body {
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
 }
 
+/* ==============================================================================
+   QUEUE TOOLBAR & TABLE ACTION BUTTONS (RESPONSIVE)
+   ============================================================================== */
+.queue-toolbar-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.queue-toolbar-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: all 0.18s ease;
+}
+
+.queue-toolbar-actions .btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.08);
+}
+
+.row-actions-group {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.btn-list-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  border-radius: var(--radius-sm);
+  transition: all 0.18s ease;
+  text-decoration: none;
+}
+
+.btn-list-action:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.09);
+}
+
+.btn-list-action.btn-reset-file:hover {
+  background: #fffbeb;
+  border-color: #f59e0b;
+  color: #b45309;
+}
+
+.btn-list-action.btn-download-file:hover {
+  background: #eff6ff;
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+@media (max-width: 992px) {
+  .queue-toolbar-actions {
+    width: 100%;
+    margin-top: 6px;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 768px) {
+  .queue-toolbar-actions {
+    gap: 6px;
+  }
+  .queue-toolbar-actions .btn {
+    flex: 1 1 calc(50% - 6px);
+    justify-content: center;
+    font-size: 12px;
+    padding: 7px 10px;
+  }
+  .row-actions-group {
+    gap: 4px;
+  }
+  .btn-list-action {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+}
+
+

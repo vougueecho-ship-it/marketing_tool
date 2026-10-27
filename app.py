@@ -5,13 +5,13 @@ import csv
 import re
 import io
 import urllib.parse
-from flask import Flask, render_template, request, jsonify, Response, redirect, session, url_for
+from flask import Flask, render_template, request, jsonify, Response, redirect, session, url_for, send_file
 from werkzeug.utils import secure_filename
 from mailer import (
     manager, load_config, save_config, load_file_recipients, 
     get_available_lead_files, get_db, log_event, record_click,
     get_sender_accounts, add_sender_account, update_sender_account, delete_sender_account,
-    parse_emails_from_file, UPLOADS_DIR, sync_engaged_leads_file
+    parse_emails_from_file, UPLOADS_DIR, BASE_DIR, sync_engaged_leads_file
 )
 from templates_data import (
     TEMPLATES, generate_custom_template, add_custom_template,
@@ -232,6 +232,117 @@ def manage_queue():
         return jsonify({"success": success, "message": msg, "file_queue": manager.file_queue})
     
     return jsonify({"active_file": manager.active_file, "file_queue": manager.file_queue})
+
+@app.route("/api/queue/reset", methods=["POST"])
+def reset_queue():
+    data = request.json or {}
+    reset_leads = data.get("reset_leads", True)
+    clear_queue = data.get("clear_queue", True)
+    target_files = data.get("files")
+
+    # Determine files to reset: explicit list, current queue, or active file
+    files_to_reset = []
+    if target_files and isinstance(target_files, list) and len(target_files) > 0:
+        files_to_reset = [f for f in target_files if f and isinstance(f, str)]
+    elif manager.file_queue:
+        files_to_reset = list(manager.file_queue)
+    elif manager.active_file:
+        files_to_reset = [manager.active_file]
+
+    total_leads_reset = 0
+    if reset_leads and files_to_reset:
+        conn = get_db()
+        cursor = conn.cursor()
+        for fname in files_to_reset:
+            cursor.execute("""
+                UPDATE recipients 
+                SET status = 'pending', sent_at = NULL, error_msg = NULL, attempts = 0 
+                WHERE file_name = ?
+            """, (fname,))
+            total_leads_reset += cursor.rowcount
+        conn.commit()
+        conn.close()
+
+    if clear_queue:
+        manager.set_file_queue([])
+
+    log_event(f"🔄 Queue Reset: {total_leads_reset} leads reset to Pending across {len(files_to_reset)} list(s).")
+    return jsonify({
+        "success": True,
+        "message": f"Queue successfully reset! {total_leads_reset} leads restored to Pending.",
+        "file_queue": manager.file_queue,
+        "reset_count": total_leads_reset,
+        "affected_files": files_to_reset
+    })
+
+@app.route("/api/files/download", methods=["GET"])
+def download_lead_file():
+    file_name = request.args.get("file_name", "").strip()
+    if not file_name:
+        return jsonify({"success": False, "error": "No file name specified."}), 400
+
+    safe_name = os.path.basename(file_name)
+
+    # 1. Check uploads directory
+    p_upload = os.path.join(UPLOADS_DIR, safe_name)
+    if os.path.isfile(p_upload):
+        return send_file(p_upload, as_attachment=True, download_name=safe_name)
+
+    # 2. Check base directory
+    p_base = os.path.join(BASE_DIR, safe_name)
+    if os.path.isfile(p_base):
+        return send_file(p_base, as_attachment=True, download_name=safe_name)
+
+    # 3. Fallback: export all leads from database as CSV
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT email, status, sent_at, error_msg FROM recipients WHERE file_name = ? ORDER BY id ASC", (file_name,))
+    rows = cursor.fetchall()
+    conn.close()
+
+    if rows:
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["Email", "Status", "Sent At", "Error Message"])
+        for r in rows:
+            writer.writerow([r["email"], r["status"], r["sent_at"] or "", r["error_msg"] or ""])
+        output.seek(0)
+        export_name = os.path.splitext(safe_name)[0] + ".csv"
+        return Response(
+            output.getvalue(),
+            mimetype="text/csv",
+            headers={"Content-Disposition": f"attachment; filename={export_name}"}
+        )
+
+    return jsonify({"success": False, "error": f"File '{file_name}' not found."}), 404
+
+@app.route("/api/files/download-multiple", methods=["POST"])
+def download_multiple_lead_files():
+    data = request.json or {}
+    files = data.get("files", [])
+    if not files or not isinstance(files, list):
+        return jsonify({"success": False, "error": "No files selected."}), 400
+
+    conn = get_db()
+    cursor = conn.cursor()
+    placeholders = ",".join(["?"] * len(files))
+    cursor.execute(f"SELECT file_name, email, status, sent_at, error_msg FROM recipients WHERE file_name IN ({placeholders}) ORDER BY file_name ASC, id ASC", files)
+    rows = cursor.fetchall()
+    conn.close()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["File Name", "Email", "Status", "Sent At", "Error Message"])
+    for r in rows:
+        writer.writerow([r["file_name"], r["email"], r["status"], r["sent_at"] or "", r["error_msg"] or ""])
+    output.seek(0)
+
+    filename = f"exported_leads_{len(files)}_lists.csv"
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
 
 # ==================== CAMPAIGN & TEMPLATES API ====================
 @app.route("/api/stats", methods=["GET"])

@@ -11,6 +11,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // DOM Elements - Queue Controls
   const btnSetQueue = document.getElementById('btn-set-queue');
+  const btnResetQueue = document.getElementById('btn-reset-queue');
+  const btnDownloadSelected = document.getElementById('btn-download-selected');
   const btnClearQueue = document.getElementById('btn-clear-queue');
   const queueBanner = document.getElementById('queue-banner');
   const queueSequenceDisplay = document.getElementById('queue-sequence-display');
@@ -232,12 +234,18 @@ document.addEventListener('DOMContentLoaded', () => {
               <td><span class="text-gold">${Number(f.sent).toLocaleString()}</span></td>
               <td>${Number(f.pending).toLocaleString()}</td>
               <td>
-                <div style="display: flex; gap: 6px; align-items: center;">
+                <div class="row-actions-group">
                   ${isCurrent ? 
-                    '<button class="btn btn-sm btn-primary" disabled><i class="fa-solid fa-check"></i> Selected</button>' : 
-                    `<button class="btn btn-sm btn-outline btn-select-file" data-file="${escapeHtml(f.name)}">Select List</button>`
+                    '<button class="btn btn-sm btn-primary btn-list-action" disabled title="Currently targeted campaign list"><i class="fa-solid fa-check"></i> Selected</button>' : 
+                    `<button class="btn btn-sm btn-outline btn-list-action btn-select-file" data-file="${escapeHtml(f.name)}" title="Select this list as active campaign target">Select List</button>`
                   }
-                  <button class="btn btn-sm btn-danger btn-delete-file" data-file="${escapeHtml(f.name)}" title="Delete list & remove leads">
+                  <button class="btn btn-sm btn-outline btn-list-action btn-reset-file" data-file="${escapeHtml(f.name)}" title="Reset list: mark all sent leads back to Pending (0 sent)">
+                    <i class="fa-solid fa-rotate-left text-warning"></i> Reset
+                  </button>
+                  <a href="/api/files/download?file_name=${encodeURIComponent(f.name)}" class="btn btn-sm btn-outline btn-list-action btn-download-file" data-file="${escapeHtml(f.name)}" title="Download ${escapeHtml(f.name)}" download>
+                    <i class="fa-solid fa-download text-primary"></i> Download
+                  </a>
+                  <button class="btn btn-sm btn-danger btn-list-action btn-delete-file" data-file="${escapeHtml(f.name)}" title="Delete list & remove leads">
                     <i class="fa-solid fa-trash-can"></i>
                   </button>
                 </div>
@@ -246,10 +254,41 @@ document.addEventListener('DOMContentLoaded', () => {
           `;
         }).join('');
 
-        // Attach listeners for select & delete buttons
+        // Attach listeners for select, reset & delete buttons
         document.querySelectorAll('.btn-select-file').forEach(btn => {
           btn.addEventListener('click', () => {
             selectFile(btn.getAttribute('data-file'));
+          });
+        });
+
+        document.querySelectorAll('.btn-reset-file').forEach(btn => {
+          btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const fileName = btn.getAttribute('data-file');
+            if (!fileName) return;
+
+            if (!confirm(`Reset all sent leads in '${fileName}' back to "Pending" status?\n\nThis will reset the Sent count back to 0 so you can re-run this list or queue.`)) {
+              return;
+            }
+
+            try {
+              const res = await fetch('/api/campaign/reset', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ file_name: fileName })
+              });
+              const data = await res.json();
+              if (data.success) {
+                loadFiles();
+                fetchStats();
+                fetchLogs();
+                if (typeof loadRecipients === 'function') loadRecipients();
+              } else {
+                alert(data.error || 'Failed to reset list.');
+              }
+            } catch (err) {
+              alert('Error resetting list: ' + err.message);
+            }
           });
         });
 
@@ -373,6 +412,100 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       } catch (err) {
         alert('Error setting queue: ' + err.message);
+      }
+    });
+  }
+
+  if (btnResetQueue) {
+    btnResetQueue.addEventListener('click', async () => {
+      const qCount = fileQueue ? fileQueue.length : 0;
+      const checkedInputs = Array.from(document.querySelectorAll('.chk-file-select:checked'));
+      const checkedFiles = checkedInputs.map(input => input.value);
+
+      let targetFiles = [];
+      let confirmMsg = '';
+
+      if (qCount > 0) {
+        targetFiles = fileQueue;
+        confirmMsg = `Reset Campaign Queue (${qCount} files)?\n\n• Lists in Queue: ${fileQueue.join(', ')}\n• All sent leads will be marked back to "Pending" (0 sent)\n• The queue order will be reset fresh so you can re-launch.`;
+      } else if (checkedFiles.length > 0) {
+        targetFiles = checkedFiles;
+        confirmMsg = `Reset leads in the ${checkedFiles.length} checked list(s) back to "Pending" (0 sent)?\n\nLists: ${checkedFiles.join(', ')}`;
+      } else if (activeFile) {
+        targetFiles = [activeFile];
+        confirmMsg = `Reset all leads in active list '${activeFile}' back to "Pending" (0 sent)?`;
+      } else {
+        alert('Please check or queue at least one lead list to reset.');
+        return;
+      }
+
+      if (!confirm(confirmMsg)) return;
+
+      try {
+        const res = await fetch('/api/queue/reset', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            files: targetFiles, 
+            reset_leads: true, 
+            clear_queue: qCount > 0 
+          })
+        });
+        const data = await res.json();
+        if (data.success) {
+          alert(`✅ ${data.message || 'Queue successfully reset!'}`);
+          fileQueue = data.file_queue || [];
+          renderQueueUI();
+          loadFiles();
+          fetchStats();
+          fetchLogs();
+          if (typeof loadRecipients === 'function') loadRecipients();
+        } else {
+          alert(data.error || 'Failed to reset queue.');
+        }
+      } catch (err) {
+        alert('Error resetting queue: ' + err.message);
+      }
+    });
+  }
+
+  if (btnDownloadSelected) {
+    btnDownloadSelected.addEventListener('click', async () => {
+      const checkedInputs = Array.from(document.querySelectorAll('.chk-file-select:checked'));
+      const selectedFiles = checkedInputs.map(input => input.value);
+
+      if (selectedFiles.length === 0) {
+        if (activeFile) {
+          window.location.href = `/api/files/download?file_name=${encodeURIComponent(activeFile)}`;
+          return;
+        }
+        alert('Please check at least one file from the table to download.');
+        return;
+      }
+
+      if (selectedFiles.length === 1) {
+        window.location.href = `/api/files/download?file_name=${encodeURIComponent(selectedFiles[0])}`;
+      } else {
+        try {
+          const res = await fetch('/api/files/download-multiple', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ files: selectedFiles })
+          });
+          if (!res.ok) throw new Error('Download request failed');
+          const blob = await res.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.style.display = 'none';
+          a.href = url;
+          a.download = `exported_leads_${selectedFiles.length}_lists.csv`;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          a.remove();
+        } catch (err) {
+          alert('Error downloading selected lists: ' + err.message);
+        }
       }
     });
   }

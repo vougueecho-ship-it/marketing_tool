@@ -333,6 +333,23 @@ app.get('/api/files', (req, res) => {
   res.json({ files, active_file: cfg.excel_file || 'client sheet.xlsx' });
 });
 
+// Download File API
+app.get('/api/files/download', (req, res) => {
+  const fileName = (req.query.file_name || '').trim();
+  if (!fileName) return res.status(400).json({ success: false, error: 'No file name provided' });
+
+  const safeName = path.basename(fileName);
+  const p1 = path.join(UPLOADS_DIR, safeName);
+  const p2 = path.join(__dirname, safeName);
+
+  if (fs.existsSync(p1)) {
+    return res.download(p1, safeName);
+  } else if (fs.existsSync(p2)) {
+    return res.download(p2, safeName);
+  }
+  res.status(404).json({ success: false, error: 'File not found on server' });
+});
+
 // Senders API
 app.get('/api/senders', (req, res) => {
   const cfg = loadConfig();
