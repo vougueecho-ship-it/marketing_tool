@@ -2131,6 +2131,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const verifierFileSelect = document.getElementById('verifier-file-select');
   const verifierEngineSelect = document.getElementById('verifier-engine-select');
   const btnStartVerify = document.getElementById('btn-start-verify');
+  const btnPauseVerify = document.getElementById('btn-pause-verify');
+  const btnStopVerify = document.getElementById('btn-stop-verify');
   const verifierSingleInput = document.getElementById('verifier-single-input');
   const btnVerifySingle = document.getElementById('btn-verify-single');
   const verifierSingleResult = document.getElementById('verifier-single-result');
@@ -2243,25 +2245,39 @@ document.addEventListener('DOMContentLoaded', () => {
     return !!(status && Number(status.total || 0) > 0);
   }
 
+  function verifierIsPartial(status) {
+    if (!status) return false;
+    const total = Number(status.total || 0);
+    const progress = Number(status.progress || 0);
+    return total > 0 && progress > 0 && progress < total;
+  }
+
   function applyVerifierStatus(status) {
     if (!status) return;
     lastVerifierStatus = status;
-    const running = !!status.is_running;
+    const paused = !!status.is_paused;
+    const scanning = !!status.is_running && !paused;
+    const active = scanning || paused;
     const hasResults = verifierHasResults(status);
+    const partial = !active && verifierIsPartial(status);
     const percent = Number(status.percent || 0);
+    const progress = Number(status.progress || 0);
+    const total = Number(status.total || 0);
 
     if (verifierProgressPercent) verifierProgressPercent.textContent = `${percent}%`;
     if (verifierProgressBar) verifierProgressBar.style.width = `${percent}%`;
     if (verifierCurrentScanning) {
-      if (running) {
-        const label = status.current_email && status.current_email !== 'Starting...'
-          ? `Checking: ${status.current_email} (${status.progress || 0}/${status.total || 0})`
-          : `Preparing list... (${status.progress || 0}/${status.total || 0})`;
+      if (scanning) {
+        const label = status.current_email && status.current_email !== 'Starting...' && status.current_email !== 'Resuming...'
+          ? `Checking: ${status.current_email} (${progress}/${total})`
+          : `Preparing list... (${progress}/${total})`;
         verifierCurrentScanning.textContent = label;
+      } else if (paused) {
+        verifierCurrentScanning.textContent = `Paused at ${progress}/${total}. Press Start to resume.`;
+      } else if (partial) {
+        verifierCurrentScanning.textContent = `Stopped at ${progress}/${total}. Press Start to resume.`;
       } else if (hasResults) {
-        verifierCurrentScanning.textContent = status.current_email && status.current_email !== 'Completed'
-          ? status.current_email
-          : `Completed ${status.total} leads scanned!`;
+        verifierCurrentScanning.textContent = `Completed ${total} leads scanned!`;
       } else {
         verifierCurrentScanning.textContent = 'Waiting to start...';
       }
@@ -2275,8 +2291,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (vtabDeliverableCount) vtabDeliverableCount.textContent = Number(status.deliverable_count || 0).toLocaleString();
 
     if (verifierStatusLabel) {
-      if (running) {
+      if (scanning) {
         verifierStatusLabel.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin text-gold"></i> Status: Scanning in progress...';
+      } else if (paused) {
+        verifierStatusLabel.innerHTML = '<i class="fa-solid fa-pause" style="color:#d97706;"></i> Status: Paused';
+      } else if (partial) {
+        verifierStatusLabel.innerHTML = '<i class="fa-solid fa-stop" style="color:#dc2626;"></i> Status: Stopped';
       } else if (hasResults) {
         verifierStatusLabel.innerHTML = '<i class="fa-solid fa-circle-check" style="color:#4ade80;"></i> Status: Verification Complete!';
       } else {
@@ -2290,19 +2310,25 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (btnStartVerify) {
-      btnStartVerify.disabled = running;
-      btnStartVerify.innerHTML = running
-        ? '<i class="fa-solid fa-spinner fa-spin"></i> Verifying...'
-        : '<i class="fa-solid fa-play"></i> Run Deep Verification';
+      btnStartVerify.disabled = scanning;
+      if (scanning) {
+        btnStartVerify.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Verifying...';
+      } else if (paused || partial) {
+        btnStartVerify.innerHTML = '<i class="fa-solid fa-play"></i> Resume';
+      } else {
+        btnStartVerify.innerHTML = '<i class="fa-solid fa-play"></i> Start';
+      }
     }
+    if (btnPauseVerify) btnPauseVerify.disabled = !scanning;
+    if (btnStopVerify) btnStopVerify.disabled = !active;
     if (verifierSpinner) verifierSpinner.style.display = 'none';
 
-    if (running || hasResults) {
+    if (active || hasResults) {
       if (verifierDetailContainer) verifierDetailContainer.style.display = 'block';
       renderVerifierDetails(currentVerifierTab);
     }
     if (verifierActionsBox) {
-      verifierActionsBox.style.display = (!running && hasResults) ? 'flex' : 'none';
+      verifierActionsBox.style.display = (!active && hasResults) ? 'flex' : 'none';
     }
   }
 
@@ -2313,9 +2339,9 @@ document.addEventListener('DOMContentLoaded', () => {
       const res = await fetch('/api/verifier/status');
       if (!res.ok) return;
       const status = await res.json();
-      if (!status.is_running && !verifierHasResults(status)) return;
+      if (!status.is_running && !status.is_paused && !verifierHasResults(status)) return;
       applyVerifierStatus(status);
-      if (status.is_running) startVerifierPolling();
+      if (status.is_running || status.is_paused) startVerifierPolling();
     } catch (err) {
       console.error('Verifier resume failed:', err);
       verifierResumeStarted = false;
@@ -2350,6 +2376,10 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
+      const previous = lastVerifierStatus;
+      const sameFile = !previous || !previous.current_file || previous.current_file === selectedFile;
+      const resume = !!(sameFile && previous && (previous.is_paused || verifierIsPartial(previous)));
+
       btnStartVerify.disabled = true;
       btnStartVerify.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Verifying...';
       if (verifierSpinner) verifierSpinner.style.display = 'inline-block';
@@ -2360,7 +2390,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const res = await fetch('/api/verifier/start', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ file_name: selectedFile, check_smtp: true })
+          body: JSON.stringify({ file_name: selectedFile, check_smtp: true, resume: resume })
         });
         const data = await res.json();
         if (data.success) {
@@ -2370,14 +2400,51 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
           alert(data.error || 'Failed to start verification.');
           btnStartVerify.disabled = false;
-          btnStartVerify.innerHTML = '<i class="fa-solid fa-play"></i> Run Deep Verification';
+          btnStartVerify.innerHTML = '<i class="fa-solid fa-play"></i> Start';
           if (verifierSpinner) verifierSpinner.style.display = 'none';
         }
       } catch (err) {
         alert('Network error starting verifier: ' + err.message);
         btnStartVerify.disabled = false;
-        btnStartVerify.innerHTML = '<i class="fa-solid fa-play"></i> Run Deep Verification';
+        btnStartVerify.innerHTML = '<i class="fa-solid fa-play"></i> Start';
         if (verifierSpinner) verifierSpinner.style.display = 'none';
+      }
+    });
+  }
+
+  if (btnPauseVerify) {
+    btnPauseVerify.addEventListener('click', async () => {
+      btnPauseVerify.disabled = true;
+      try {
+        const res = await fetch('/api/verifier/pause', { method: 'POST' });
+        const data = await res.json();
+        if (!data.success) {
+          alert(data.error || 'Could not pause verification.');
+        }
+        startVerifierPolling();
+      } catch (err) {
+        alert('Network error pausing verifier: ' + err.message);
+        btnPauseVerify.disabled = false;
+      }
+    });
+  }
+
+  if (btnStopVerify) {
+    btnStopVerify.addEventListener('click', async () => {
+      if (!confirm('Stop verification? Progress scanned so far will be kept, and Start will resume the rest.')) {
+        return;
+      }
+      btnStopVerify.disabled = true;
+      try {
+        const res = await fetch('/api/verifier/stop', { method: 'POST' });
+        const data = await res.json();
+        if (!data.success) {
+          alert(data.error || 'Could not stop verification.');
+        }
+        startVerifierPolling();
+      } catch (err) {
+        alert('Network error stopping verifier: ' + err.message);
+        btnStopVerify.disabled = false;
       }
     });
   }
@@ -2389,7 +2456,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const res = await fetch('/api/verifier/status');
         const status = await res.json();
         applyVerifierStatus(status);
-        if (!status.is_running && verifierPollingInterval) {
+        if (!status.is_running && !status.is_paused && verifierPollingInterval) {
           clearInterval(verifierPollingInterval);
           verifierPollingInterval = null;
         }

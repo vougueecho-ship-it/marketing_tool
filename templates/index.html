@@ -571,9 +571,15 @@
                   </select>
                 </div>
 
-                <div style="display: flex; gap: 10px;">
-                  <button type="button" id="btn-start-verify" class="btn btn-success" style="flex: 1; justify-content: center;">
-                    <i class="fa-solid fa-play"></i> Run Deep Verification
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                  <button type="button" id="btn-start-verify" class="btn btn-success" style="flex: 1; justify-content: center; min-width: 140px;">
+                    <i class="fa-solid fa-play"></i> Start
+                  </button>
+                  <button type="button" id="btn-pause-verify" class="btn btn-warning" style="flex: 1; justify-content: center; min-width: 110px;" disabled>
+                    <i class="fa-solid fa-pause"></i> Pause
+                  </button>
+                  <button type="button" id="btn-stop-verify" class="btn btn-danger" style="flex: 1; justify-content: center; min-width: 110px;" disabled>
+                    <i class="fa-solid fa-stop"></i> Stop
                   </button>
                 </div>
 

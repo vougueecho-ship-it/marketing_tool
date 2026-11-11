@@ -328,11 +328,15 @@ class BatchEmailVerifier:
         self._raw_text = None
         self._check_smtp = True
         self._last_checkpoint = 0
+        self.is_paused = False
+        self.stop_requested = False
+        self._run_id = 0
         self._load_persisted_state()
 
     def _snapshot(self):
         return {
             "is_running": self.is_running,
+            "is_paused": self.is_paused,
             "progress": self.progress,
             "total": self.total,
             "current_email": self.current_email,
@@ -405,6 +409,11 @@ class BatchEmailVerifier:
             return
 
         self._hydrate(state)
+        self.is_paused = bool(state.get("is_paused"))
+        if self.is_paused:
+            self.is_running = False
+            self.stop_requested = False
+            return
         if not state.get("is_running"):
             return
         if not self._file_name and not self._raw_text:
@@ -412,10 +421,13 @@ class BatchEmailVerifier:
             return
 
         self.is_running = True
+        self.is_paused = False
+        self.stop_requested = False
+        self._run_id += 1
         self.worker_thread = threading.Thread(
             target=self._run_verification,
             args=(self._file_name, self._raw_text, self._check_smtp, 10),
-            kwargs={"resume": True},
+            kwargs={"resume": True, "run_id": self._run_id},
             daemon=True,
         )
         self.worker_thread.start()
@@ -434,27 +446,101 @@ class BatchEmailVerifier:
         self.risky_emails = []
         self._done_emails = set()
 
-    def start_verification(self, file_name=None, raw_text=None, check_smtp=True, max_workers=10):
+    def _same_unfinished_file(self, file_name):
+        same_file = bool(file_name) and file_name == (self._file_name or self.current_file)
+        unfinished = self.total > 0 and self.progress < self.total and bool(self._done_emails or self.progress > 0)
+        return same_file and unfinished
+
+    def start_verification(self, file_name=None, raw_text=None, check_smtp=True, max_workers=10, resume=False):
         with self.lock:
-            if self.is_running:
+            same_unfinished = self._same_unfinished_file(file_name)
+            should_resume = bool(resume) and same_unfinished
+            thread_alive = self.worker_thread is not None and self.worker_thread.is_alive()
+
+            if self.is_running and not self.is_paused:
                 return False, "Verification already in progress."
 
+            if self.is_running and self.is_paused and should_resume and thread_alive:
+                self.is_paused = False
+                self.stop_requested = False
+                self._write_snapshot(self._snapshot())
+                return True, "Verification resumed."
+
+            if self.is_running and self.is_paused:
+                self.stop_requested = True
+                self.is_paused = False
+                self.is_running = False
+                self._run_id += 1
+
+            if should_resume:
+                self.stop_requested = False
+                self.is_paused = False
+                self.is_running = True
+                self._check_smtp = check_smtp
+                self._run_id += 1
+                run_id = self._run_id
+                self.current_email = "Resuming..."
+                self._write_snapshot(self._snapshot())
+                self.worker_thread = threading.Thread(
+                    target=self._run_verification,
+                    args=(self._file_name or file_name, self._raw_text, check_smtp, max_workers),
+                    kwargs={"resume": True, "run_id": run_id},
+                    daemon=True,
+                )
+                self.worker_thread.start()
+                return True, "Verification resumed."
+
             self._reset_results()
+            self.stop_requested = False
+            self.is_paused = False
             self.is_running = True
             self._file_name = file_name
             self._raw_text = raw_text if raw_text and not file_name else None
             self._check_smtp = check_smtp
             self.current_file = file_name or "Raw Input"
             self.current_email = "Starting..."
+            self._run_id += 1
+            run_id = self._run_id
             self._write_snapshot(self._snapshot())
-
             self.worker_thread = threading.Thread(
                 target=self._run_verification,
                 args=(file_name, raw_text, check_smtp, max_workers),
+                kwargs={"resume": False, "run_id": run_id},
                 daemon=True
             )
             self.worker_thread.start()
             return True, "Verification started successfully."
+
+    def pause_verification(self):
+        with self.lock:
+            if self.is_paused and (self.is_running or self.progress < self.total):
+                return True, "Verification is already paused."
+            if not self.is_running:
+                return False, "Verification is not running."
+            self.is_paused = True
+            self._write_snapshot(self._snapshot())
+            return True, "Verification paused. Press Start to resume."
+
+    def stop_verification(self):
+        with self.lock:
+            if not self.is_running and not self.is_paused:
+                return False, "Verification is not running."
+            self.stop_requested = True
+            self.is_paused = False
+            self.is_running = False
+            self._run_id += 1
+            self.current_email = "Stopped"
+            self._write_snapshot(self._snapshot())
+            return True, "Verification stopped. Scanned results are kept."
+
+    def _wait_until_ready(self, run_id):
+        while True:
+            with self.lock:
+                if self._run_id != run_id or self.stop_requested or not self.is_running:
+                    return False
+                if not self.is_paused:
+                    return True
+            time.sleep(0.25)
 
     def _extract_emails(self, file_name, raw_text):
         emails = []
@@ -494,7 +580,7 @@ class BatchEmailVerifier:
                                 emails.append(cell.strip())
         return emails
 
-    def _run_verification(self, file_name, raw_text, check_smtp, max_workers, resume=False):
+    def _run_verification(self, file_name, raw_text, check_smtp, max_workers, resume=False, run_id=0):
         try:
             raw_list = self._extract_emails(file_name, raw_text)
             seen = set()
@@ -520,17 +606,19 @@ class BatchEmailVerifier:
 
             if resume and not unique_list and self._done_emails:
                 with self.lock:
-                    self.is_running = False
-                    self.current_email = "Stopped — lead file missing"
+                    if self._run_id == run_id:
+                        self.is_running = False
+                        self.is_paused = False
+                        self.current_email = "Stopped — lead file missing"
                 self._checkpoint(force=True)
                 return
 
             checked = already
             for em in unique_list:
+                if not self._wait_until_ready(run_id):
+                    break
                 if em in self._done_emails:
                     continue
-                if not self.is_running:
-                    break
 
                 self.current_email = em
                 try:
@@ -546,6 +634,8 @@ class BatchEmailVerifier:
 
                 clean_saved = (res.get('clean_email') or em).strip().lower()
                 with self.lock:
+                    if self._run_id != run_id or self.stop_requested or not self.is_running:
+                        break
                     self._done_emails.add(em)
                     if clean_saved:
                         self._done_emails.add(clean_saved)
@@ -566,14 +656,24 @@ class BatchEmailVerifier:
                 time.sleep(0.01)
 
             with self.lock:
+                if self._run_id != run_id:
+                    return
+                stopped = self.stop_requested or not self.is_running
                 self.is_running = False
-                if self.current_email != "Stopped — lead file missing":
+                self.is_paused = False
+                self.stop_requested = False
+                if stopped and self.progress < self.total:
+                    self.current_email = "Stopped"
+                elif self.current_email != "Stopped — lead file missing":
                     self.current_email = "Completed"
             self._checkpoint(force=True)
         except Exception:
             with self.lock:
+                if self._run_id != run_id:
+                    return
                 self.is_running = False
-                if not self.current_email or self.current_email == "Starting...":
+                self.is_paused = False
+                if not self.current_email or self.current_email in ("Starting...", "Resuming..."):
                     self.current_email = "Stopped"
             self._checkpoint(force=True)
 
@@ -585,6 +685,7 @@ class BatchEmailVerifier:
                 percent = 0
             return {
                 'is_running': self.is_running,
+                'is_paused': self.is_paused,
                 'progress': self.progress,
                 'total': self.total,
                 'percent': percent,

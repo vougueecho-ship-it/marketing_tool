@@ -608,13 +608,35 @@ def start_verification_api():
     file_name = data.get("file_name", "").strip()
     raw_text = data.get("raw_text", "").strip()
     check_smtp = bool(data.get("check_smtp", True))
+    resume = bool(data.get("resume", False))
     
-    if not file_name and not raw_text:
+    if not file_name and not raw_text and not resume:
         return jsonify({"success": False, "error": "Please select a file or paste emails to verify."}), 400
         
-    ok, msg = verifier_engine.start_verification(file_name=file_name if file_name else None, raw_text=raw_text if raw_text else None, check_smtp=check_smtp)
+    ok, msg = verifier_engine.start_verification(
+        file_name=file_name if file_name else None,
+        raw_text=raw_text if raw_text else None,
+        check_smtp=check_smtp,
+        resume=resume,
+    )
     if ok:
-        log_event(f"🔍 Started Deep Email Verification on '{file_name or 'Raw Input'}'")
+        log_event(f"🔍 {msg} '{file_name or 'Raw Input'}'")
+        return jsonify({"success": True, "message": msg})
+    return jsonify({"success": False, "error": msg}), 400
+
+@app.route("/api/verifier/pause", methods=["POST"])
+def pause_verification_api():
+    ok, msg = verifier_engine.pause_verification()
+    if ok:
+        log_event(f"⏸️ {msg}")
+        return jsonify({"success": True, "message": msg})
+    return jsonify({"success": False, "error": msg}), 400
+
+@app.route("/api/verifier/stop", methods=["POST"])
+def stop_verification_api():
+    ok, msg = verifier_engine.stop_verification()
+    if ok:
+        log_event("⏹️ Deep Email Verification stopped. Progress kept.")
         return jsonify({"success": True, "message": msg})
     return jsonify({"success": False, "error": msg}), 400
 
