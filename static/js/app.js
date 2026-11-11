@@ -2183,31 +2183,37 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (tab === 'dead') {
       const deadList = lastVerifierStatus.dead_emails || [];
+      const deadTotal = Number(lastVerifierStatus.dead_count || deadList.length);
       if (deadList.length === 0) {
-        verifierDetailList.innerHTML = '<div style="color:#4ade80; text-align:center; padding:12px;">🎉 Zero dead emails detected! All emails have valid servers.</div>';
+        verifierDetailList.innerHTML = lastVerifierStatus.is_running
+          ? '<div style="color:#94a3b8; text-align:center; padding:12px;">Scanning... dead mailboxes will show up here.</div>'
+          : '<div style="color:#4ade80; text-align:center; padding:12px;">🎉 Zero dead emails detected! All emails have valid servers.</div>';
       } else {
-        verifierDetailList.innerHTML = deadList.map(item => `
+        const shown = deadList.slice(0, 80);
+        verifierDetailList.innerHTML = shown.map(item => `
           <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 8px; border-bottom:1px solid rgba(255,255,255,0.05); gap:8px;">
             <div style="color:#f87171; font-weight:700;">✗ ${escapeHtml(item.clean_email || item.email)}</div>
             <div style="color:#fca5a5; font-size:10px; background:rgba(239,68,68,0.15); padding:2px 6px; border-radius:4px; border:1px solid rgba(239,68,68,0.3); max-width:50%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
               ${escapeHtml(item.reason || 'Mailbox dead')}
             </div>
           </div>
-        `).join('');
+        `).join('') + (deadTotal > shown.length ? `<div style="color:#94a3b8; text-align:center; padding:6px; font-size:10px;">Showing ${shown.length} of ${deadTotal.toLocaleString()} dead emails. Download the CSV for the full list.</div>` : '');
       }
     } else if (tab === 'risky') {
       const riskyList = lastVerifierStatus.risky_emails || [];
+      const riskyTotal = Number(lastVerifierStatus.risky_count || riskyList.length);
       if (riskyList.length === 0) {
         verifierDetailList.innerHTML = '<div style="color:#94a3b8; text-align:center; padding:12px;">No risky or disposable trap emails found.</div>';
       } else {
-        verifierDetailList.innerHTML = riskyList.map(item => `
+        const shown = riskyList.slice(0, 80);
+        verifierDetailList.innerHTML = shown.map(item => `
           <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 8px; border-bottom:1px solid rgba(255,255,255,0.05); gap:8px;">
             <div style="color:#fbbf24; font-weight:700;">⚠ ${escapeHtml(item.clean_email || item.email)}</div>
             <div style="color:#fcd34d; font-size:10px; background:rgba(245,158,11,0.15); padding:2px 6px; border-radius:4px; border:1px solid rgba(245,158,11,0.3); max-width:50%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
               ${escapeHtml(item.reason || 'Risky account')}
             </div>
           </div>
-        `).join('');
+        `).join('') + (riskyTotal > shown.length ? `<div style="color:#94a3b8; text-align:center; padding:6px; font-size:10px;">Showing ${shown.length} of ${riskyTotal.toLocaleString()} risky emails.</div>` : '');
       }
     } else if (tab === 'deliverable') {
       const sampleList = lastVerifierStatus.sample_deliverable || [];
@@ -2231,8 +2237,96 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  let verifierResumeStarted = false;
+
+  function verifierHasResults(status) {
+    return !!(status && Number(status.total || 0) > 0);
+  }
+
+  function applyVerifierStatus(status) {
+    if (!status) return;
+    lastVerifierStatus = status;
+    const running = !!status.is_running;
+    const hasResults = verifierHasResults(status);
+    const percent = Number(status.percent || 0);
+
+    if (verifierProgressPercent) verifierProgressPercent.textContent = `${percent}%`;
+    if (verifierProgressBar) verifierProgressBar.style.width = `${percent}%`;
+    if (verifierCurrentScanning) {
+      if (running) {
+        const label = status.current_email && status.current_email !== 'Starting...'
+          ? `Checking: ${status.current_email} (${status.progress || 0}/${status.total || 0})`
+          : `Preparing list... (${status.progress || 0}/${status.total || 0})`;
+        verifierCurrentScanning.textContent = label;
+      } else if (hasResults) {
+        verifierCurrentScanning.textContent = status.current_email && status.current_email !== 'Completed'
+          ? status.current_email
+          : `Completed ${status.total} leads scanned!`;
+      } else {
+        verifierCurrentScanning.textContent = 'Waiting to start...';
+      }
+    }
+
+    if (verifierStatDeliverable) verifierStatDeliverable.textContent = Number(status.deliverable_count || 0).toLocaleString();
+    if (verifierStatDead) verifierStatDead.textContent = Number(status.dead_count || 0).toLocaleString();
+    if (verifierStatRisky) verifierStatRisky.textContent = Number(status.risky_count || 0).toLocaleString();
+    if (vtabDeadCount) vtabDeadCount.textContent = Number(status.dead_count || 0).toLocaleString();
+    if (vtabRiskyCount) vtabRiskyCount.textContent = Number(status.risky_count || 0).toLocaleString();
+    if (vtabDeliverableCount) vtabDeliverableCount.textContent = Number(status.deliverable_count || 0).toLocaleString();
+
+    if (verifierStatusLabel) {
+      if (running) {
+        verifierStatusLabel.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin text-gold"></i> Status: Scanning in progress...';
+      } else if (hasResults) {
+        verifierStatusLabel.innerHTML = '<i class="fa-solid fa-circle-check" style="color:#4ade80;"></i> Status: Verification Complete!';
+      } else {
+        verifierStatusLabel.innerHTML = 'Status: Ready';
+      }
+    }
+
+    if (verifierFileSelect && status.current_file) {
+      const match = Array.from(verifierFileSelect.options).some(opt => opt.value === status.current_file);
+      if (match) verifierFileSelect.value = status.current_file;
+    }
+
+    if (btnStartVerify) {
+      btnStartVerify.disabled = running;
+      btnStartVerify.innerHTML = running
+        ? '<i class="fa-solid fa-spinner fa-spin"></i> Verifying...'
+        : '<i class="fa-solid fa-play"></i> Run Deep Verification';
+    }
+    if (verifierSpinner) verifierSpinner.style.display = 'none';
+
+    if (running || hasResults) {
+      if (verifierDetailContainer) verifierDetailContainer.style.display = 'block';
+      renderVerifierDetails(currentVerifierTab);
+    }
+    if (verifierActionsBox) {
+      verifierActionsBox.style.display = (!running && hasResults) ? 'flex' : 'none';
+    }
+  }
+
+  async function resumeVerifierUI() {
+    if (verifierResumeStarted) return;
+    verifierResumeStarted = true;
+    try {
+      const res = await fetch('/api/verifier/status');
+      if (!res.ok) return;
+      const status = await res.json();
+      if (!status.is_running && !verifierHasResults(status)) return;
+      applyVerifierStatus(status);
+      if (status.is_running) startVerifierPolling();
+    } catch (err) {
+      console.error('Verifier resume failed:', err);
+      verifierResumeStarted = false;
+    }
+  }
+
   function populateVerifierFiles() {
-    if (!verifierFileSelect) return;
+    if (!verifierFileSelect) {
+      resumeVerifierUI();
+      return;
+    }
     verifierFileSelect.innerHTML = '';
     fetch('/api/files').then(res => res.json()).then(data => {
       const files = data.files || [];
@@ -2242,7 +2336,8 @@ document.addEventListener('DOMContentLoaded', () => {
         opt.textContent = `${f.name} (${f.total} leads)`;
         verifierFileSelect.appendChild(opt);
       });
-    }).catch(err => console.error('Error loading verifier files:', err));
+    }).catch(err => console.error('Error loading verifier files:', err))
+      .finally(() => resumeVerifierUI());
   }
 
   populateVerifierFiles();
@@ -2270,6 +2365,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const data = await res.json();
         if (data.success) {
           startVerifierPolling();
+        } else if ((data.error || '').toLowerCase().includes('already')) {
+          startVerifierPolling();
         } else {
           alert(data.error || 'Failed to start verification.');
           btnStartVerify.disabled = false;
@@ -2287,48 +2384,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function startVerifierPolling() {
     if (verifierPollingInterval) clearInterval(verifierPollingInterval);
-    verifierPollingInterval = setInterval(async () => {
+    const poll = async () => {
       try {
         const res = await fetch('/api/verifier/status');
         const status = await res.json();
-        lastVerifierStatus = status;
-
-        if (verifierProgressPercent) verifierProgressPercent.textContent = `${status.percent}%`;
-        if (verifierProgressBar) verifierProgressBar.style.width = `${status.percent}%`;
-        if (verifierCurrentScanning) {
-          verifierCurrentScanning.textContent = status.is_running ? `Checking: ${status.current_email} (${status.progress}/${status.total})` : `Completed ${status.total} leads scanned!`;
-        }
-
-        if (verifierStatDeliverable) verifierStatDeliverable.textContent = status.deliverable_count.toLocaleString();
-        if (verifierStatDead) verifierStatDead.textContent = status.dead_count.toLocaleString();
-        if (verifierStatRisky) verifierStatRisky.textContent = status.risky_count.toLocaleString();
-
-        if (vtabDeadCount) vtabDeadCount.textContent = status.dead_count.toLocaleString();
-        if (vtabRiskyCount) vtabRiskyCount.textContent = status.risky_count.toLocaleString();
-        if (vtabDeliverableCount) vtabDeliverableCount.textContent = status.deliverable_count.toLocaleString();
-
-        if (verifierStatusLabel) {
-          verifierStatusLabel.innerHTML = status.is_running ? '<i class="fa-solid fa-circle-notch fa-spin text-gold"></i> Status: Scanning in progress...' : '<i class="fa-solid fa-circle-check" style="color:#4ade80;"></i> Status: Verification Complete!';
-        }
-
-        renderVerifierDetails(currentVerifierTab);
-
-        if (!status.is_running) {
+        applyVerifierStatus(status);
+        if (!status.is_running && verifierPollingInterval) {
           clearInterval(verifierPollingInterval);
           verifierPollingInterval = null;
-          if (btnStartVerify) {
-            btnStartVerify.disabled = false;
-            btnStartVerify.innerHTML = '<i class="fa-solid fa-play"></i> Run Deep Verification';
-          }
-          if (verifierSpinner) verifierSpinner.style.display = 'none';
-          if (verifierActionsBox) {
-            verifierActionsBox.style.display = 'flex';
-          }
         }
       } catch (err) {
         console.error('Error polling verifier status:', err);
       }
-    }, 600);
+    };
+    poll();
+    verifierPollingInterval = setInterval(poll, 600);
   }
 
   if (btnApplyVerifierClean) {

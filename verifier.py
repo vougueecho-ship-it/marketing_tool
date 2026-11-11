@@ -27,6 +27,7 @@ import openpyxl
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOADS_DIR = os.path.join(BASE_DIR, "uploads")
 CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
+VERIFIER_STATE_PATH = os.path.join(BASE_DIR, "verifier_state.json")
 
 DISPOSABLE_DOMAINS = {
     'mailinator.com', 'tempmail.com', 'guerrillamail.com', '10minutemail.com',
@@ -110,10 +111,17 @@ def smtp_check_mailbox(email, timeout=5):
     domain = parts[1].lower()
     mx_hosts = get_mx_records(domain)
     if not mx_hosts:
-        # Check A record as fallback
+        # A-record fallback. dig has a hard timeout; gethostbyname can hang forever.
         try:
-            socket.gethostbyname(domain)
-            return 'risky', 'No MX record, but domain resolves'
+            res = subprocess.run(
+                ['dig', '+short', 'A', domain],
+                capture_output=True, text=True, timeout=3
+            )
+            if (res.stdout or '').strip():
+                return 'risky', 'No MX record, but domain resolves'
+            return 'dead', 'Domain does not exist (No MX/A records)'
+        except subprocess.TimeoutExpired:
+            return 'risky', 'DNS lookup timed out'
         except Exception:
             return 'dead', 'Domain does not exist (No MX/A records)'
             
@@ -313,26 +321,133 @@ class BatchEmailVerifier:
         self.deliverable_emails = []
         self.dead_emails = []
         self.risky_emails = []
-        self.lock = threading.Lock()
+        self.lock = threading.RLock()
         self.worker_thread = None
+        self._done_emails = set()
+        self._file_name = None
+        self._raw_text = None
+        self._check_smtp = True
+        self._last_checkpoint = 0
+        self._load_persisted_state()
+
+    def _snapshot(self):
+        return {
+            "is_running": self.is_running,
+            "progress": self.progress,
+            "total": self.total,
+            "current_email": self.current_email,
+            "current_file": self.current_file,
+            "file_name": self._file_name or "",
+            "raw_text": self._raw_text or "",
+            "check_smtp": self._check_smtp,
+            "duplicate_count": self.duplicate_count,
+            "deliverable_emails": list(self.deliverable_emails),
+            "dead_emails": list(self.dead_emails),
+            "risky_emails": list(self.risky_emails),
+            "done_emails": list(self._done_emails),
+            "updated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        }
+
+    def _write_snapshot(self, snap):
+        try:
+            tmp = VERIFIER_STATE_PATH + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(snap, f)
+            os.replace(tmp, VERIFIER_STATE_PATH)
+        except Exception:
+            pass
+
+    def _checkpoint(self, force=False):
+        now = time.time()
+        with self.lock:
+            if not force and (self.progress % 20 != 0) and (now - self._last_checkpoint < 3):
+                return
+            snap = self._snapshot()
+            self._last_checkpoint = now
+        self._write_snapshot(snap)
+
+    def _hydrate(self, state):
+        self.current_file = state.get("current_file") or state.get("file_name") or ""
+        self._file_name = state.get("file_name") or None
+        self._raw_text = state.get("raw_text") or None
+        self._check_smtp = bool(state.get("check_smtp", True))
+        self.total = int(state.get("total") or 0)
+        self.progress = int(state.get("progress") or 0)
+        self.duplicate_count = int(state.get("duplicate_count") or 0)
+        self.current_email = state.get("current_email") or ""
+        self.deliverable_emails = list(state.get("deliverable_emails") or [])
+        self.dead_emails = list(state.get("dead_emails") or [])
+        self.risky_emails = list(state.get("risky_emails") or [])
+        self.deliverable_count = len(self.deliverable_emails)
+        self.dead_count = len(self.dead_emails)
+        self.risky_count = len(self.risky_emails)
+        self.results = []
+        done = set(state.get("done_emails") or [])
+        if not done:
+            done.update(self.deliverable_emails)
+            for item in self.dead_emails + self.risky_emails:
+                em = (item.get("clean_email") or item.get("email") or "").strip().lower()
+                if em:
+                    done.add(em)
+        self._done_emails = done
+        if self.total and self.progress > self.total:
+            self.progress = self.total
+
+    def _load_persisted_state(self):
+        if not os.path.exists(VERIFIER_STATE_PATH):
+            return
+        try:
+            with open(VERIFIER_STATE_PATH, "r", encoding="utf-8") as f:
+                state = json.load(f)
+        except Exception:
+            return
+        if not isinstance(state, dict):
+            return
+
+        self._hydrate(state)
+        if not state.get("is_running"):
+            return
+        if not self._file_name and not self._raw_text:
+            self.is_running = False
+            return
+
+        self.is_running = True
+        self.worker_thread = threading.Thread(
+            target=self._run_verification,
+            args=(self._file_name, self._raw_text, self._check_smtp, 10),
+            kwargs={"resume": True},
+            daemon=True,
+        )
+        self.worker_thread.start()
+
+    def _reset_results(self):
+        self.progress = 0
+        self.total = 0
+        self.current_email = ""
+        self.deliverable_count = 0
+        self.dead_count = 0
+        self.risky_count = 0
+        self.duplicate_count = 0
+        self.results = []
+        self.deliverable_emails = []
+        self.dead_emails = []
+        self.risky_emails = []
+        self._done_emails = set()
 
     def start_verification(self, file_name=None, raw_text=None, check_smtp=True, max_workers=10):
         with self.lock:
             if self.is_running:
                 return False, "Verification already in progress."
-                
+
+            self._reset_results()
             self.is_running = True
-            self.progress = 0
-            self.deliverable_count = 0
-            self.dead_count = 0
-            self.risky_count = 0
-            self.duplicate_count = 0
-            self.results = []
-            self.deliverable_emails = []
-            self.dead_emails = []
-            self.risky_emails = []
+            self._file_name = file_name
+            self._raw_text = raw_text if raw_text and not file_name else None
+            self._check_smtp = check_smtp
             self.current_file = file_name or "Raw Input"
-            
+            self.current_email = "Starting..."
+            self._write_snapshot(self._snapshot())
+
             self.worker_thread = threading.Thread(
                 target=self._run_verification,
                 args=(file_name, raw_text, check_smtp, max_workers),
@@ -379,51 +494,95 @@ class BatchEmailVerifier:
                                 emails.append(cell.strip())
         return emails
 
-    def _run_verification(self, file_name, raw_text, check_smtp, max_workers):
-        raw_list = self._extract_emails(file_name, raw_text)
-        self.total = len(raw_list)
-        
-        seen = set()
-        unique_list = []
-        for em in raw_list:
-            clean = em.strip().lower()
-            if clean in seen:
-                self.duplicate_count += 1
-            else:
-                seen.add(clean)
-                unique_list.append(clean)
-                
-        self.total = len(unique_list)
-        
-        for idx, em in enumerate(unique_list):
-            if not self.is_running:
-                break
-                
-            self.current_email = em
-            self.progress = idx + 1
-            
-            res = verify_single_email(em, check_smtp=check_smtp)
-            self.results.append(res)
-            
-            if res['deliverable']:
-                self.deliverable_count += 1
-                self.deliverable_emails.append(res['clean_email'])
-            elif res['status'] == 'dead':
-                self.dead_count += 1
-                self.dead_emails.append(res)
-            else:
-                self.risky_count += 1
-                self.risky_emails.append(res)
-                
-            # Adaptive delay to prevent aggressive DNS throttling
-            time.sleep(0.01)
+    def _run_verification(self, file_name, raw_text, check_smtp, max_workers, resume=False):
+        try:
+            raw_list = self._extract_emails(file_name, raw_text)
+            seen = set()
+            unique_list = []
+            duplicates = 0
+            for em in raw_list:
+                clean = em.strip().lower()
+                if clean in seen:
+                    duplicates += 1
+                else:
+                    seen.add(clean)
+                    unique_list.append(clean)
 
-        self.is_running = False
-        self.current_email = "Completed"
+            with self.lock:
+                self.total = len(unique_list)
+                self.duplicate_count = duplicates
+                if resume:
+                    already = sum(1 for em in unique_list if em in self._done_emails)
+                    self.progress = already
+                else:
+                    self.progress = 0
+                    already = 0
+
+            if resume and not unique_list and self._done_emails:
+                with self.lock:
+                    self.is_running = False
+                    self.current_email = "Stopped — lead file missing"
+                self._checkpoint(force=True)
+                return
+
+            checked = already
+            for em in unique_list:
+                if em in self._done_emails:
+                    continue
+                if not self.is_running:
+                    break
+
+                self.current_email = em
+                try:
+                    res = verify_single_email(em, check_smtp=check_smtp)
+                except Exception as exc:
+                    res = {
+                        'email': em,
+                        'clean_email': em,
+                        'status': 'risky',
+                        'reason': f'Check failed: {str(exc)[:80]}',
+                        'deliverable': False,
+                    }
+
+                clean_saved = (res.get('clean_email') or em).strip().lower()
+                with self.lock:
+                    self._done_emails.add(em)
+                    if clean_saved:
+                        self._done_emails.add(clean_saved)
+                    self.results.append(res)
+                    if res.get('deliverable'):
+                        self.deliverable_count += 1
+                        self.deliverable_emails.append(res.get('clean_email') or em)
+                    elif res.get('status') == 'dead':
+                        self.dead_count += 1
+                        self.dead_emails.append(res)
+                    else:
+                        self.risky_count += 1
+                        self.risky_emails.append(res)
+                    checked += 1
+                    self.progress = checked
+
+                self._checkpoint()
+                time.sleep(0.01)
+
+            with self.lock:
+                self.is_running = False
+                if self.current_email != "Stopped — lead file missing":
+                    self.current_email = "Completed"
+            self._checkpoint(force=True)
+        except Exception:
+            with self.lock:
+                self.is_running = False
+                if not self.current_email or self.current_email == "Starting...":
+                    self.current_email = "Stopped"
+            self._checkpoint(force=True)
 
     def get_status(self):
         with self.lock:
-            percent = int((self.progress / self.total * 100)) if self.total > 0 else (100 if not self.is_running and self.total == 0 else 0)
+            if self.total > 0:
+                percent = int(min(100, (self.progress / self.total) * 100))
+            else:
+                percent = 0
             return {
                 'is_running': self.is_running,
                 'progress': self.progress,
@@ -435,9 +594,11 @@ class BatchEmailVerifier:
                 'dead_count': self.dead_count,
                 'risky_count': self.risky_count,
                 'duplicate_count': self.duplicate_count,
-                'dead_emails': self.dead_emails,
-                'risky_emails': self.risky_emails,
-                'sample_deliverable': self.deliverable_emails[:50]
+                'dead_emails': list(self.dead_emails[:80]),
+                'risky_emails': list(self.risky_emails[:80]),
+                'sample_deliverable': list(self.deliverable_emails[:50]),
+                'dead_total': self.dead_count,
+                'risky_total': self.risky_count,
             }
 
     def apply_clean_list(self, target_file=None):

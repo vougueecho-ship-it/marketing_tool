@@ -10,4 +10,5 @@ campaign_data.db
 scratch/
 uploads/engaged_hot_leads.csv
 campaign_state.json
+verifier_state.json
 *.state.json

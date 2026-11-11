@@ -648,8 +648,8 @@ def verify_single_email_api():
 
 @app.route("/api/verifier/export-dead", methods=["GET"])
 def export_dead_emails_api():
-    status = verifier_engine.get_status()
-    dead_list = status.get("dead_emails", [])
+    with verifier_engine.lock:
+        dead_list = list(verifier_engine.dead_emails)
     
     output = io.StringIO()
     writer = csv.writer(output)
