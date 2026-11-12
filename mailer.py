@@ -555,44 +555,24 @@ def process_spintax(text):
 
 def wrap_tracking_links(content, recipient_email, tracking_base_url=None, target_url="https://winningheaven.com"):
     """
-    Ensures email links & CTA buttons ALWAYS track clicks for every recipient on mobile & desktop.
-    Wraps links via: {base_url}/r?e={encoded_email}&dest={encoded_dest}
-    When recipient clicks, their email is recorded in Engaged Hot Leads and saved to uploads/engaged_hot_leads.csv.
+    Leaves the site link as written. A per-recipient /r?e=&dest= redirect was
+    being shown as the blue link, and mail relays were marking that as junk.
     """
     if not content:
         return ""
 
-    clean_email = recipient_email.strip().lower()
-    encoded_email = urllib.parse.quote(clean_email)
-    
-    base_url = (tracking_base_url or "").strip().rstrip('/')
-    if not base_url or "127.0.0.1" in base_url or "localhost" in base_url or "0.0.0.0" in base_url:
-        try:
-            cfg = load_config()
-            cfg_url = (cfg.get("tracking_base_url") or "").strip().rstrip('/')
-            if cfg_url and "127.0.0.1" not in cfg_url and "localhost" not in cfg_url:
-                base_url = cfg_url
-            else:
-                base_url = "https://tool.winningheaven.com"
-        except Exception:
-            base_url = "https://tool.winningheaven.com"
+    clean_email = (recipient_email or "").strip().lower()
+    site = (target_url or "https://winningheaven.com").strip()
+    if not site.startswith("http"):
+        site = "https://winningheaven.com"
 
-    default_dest = (target_url or "https://winningheaven.com").strip()
-    encoded_default_dest = urllib.parse.quote(default_dest)
-    default_track_link = f"{base_url}/r?e={encoded_email}&dest={encoded_default_dest}"
-
-    def link_replacer(match):
-        orig_link = match.group(0)
-        if "/r?e=" in orig_link or "/api/track" in orig_link:
-            return orig_link
-        encoded_dest = urllib.parse.quote(orig_link)
-        return f"{base_url}/r?e={encoded_email}&dest={encoded_dest}"
-
-    # 1. Wrap all winningheaven.com links & buttons
-    pattern = r'https?://(?:www\.)?winningheaven\.com[^\s\'"<>]*'
-    wrapped = re.sub(pattern, link_replacer, content, flags=re.IGNORECASE)
-
-    # 2. Replace dynamic button & CTA placeholders
+    # Old letters may already contain the junk redirect. Put the real site back.
+    wrapped = re.sub(
+        r'https?://[^/\s\'"<>]+/r\?e=[^\s\'"<>]*',
+        site,
+        content,
+        flags=re.IGNORECASE,
+    )
     placeholders = [
         "{track_link}", "{{track_link}}",
         "{cta_link}", "{{cta_link}}",
@@ -601,11 +581,18 @@ def wrap_tracking_links(content, recipient_email, tracking_base_url=None, target
         "{click_url}", "{{click_url}}"
     ]
     for ph in placeholders:
-        wrapped = wrapped.replace(ph, default_track_link)
-
-    # 3. Replace {email} placeholders
-    wrapped = wrapped.replace("{email}", clean_email).replace("{{email}}", clean_email)
+        wrapped = wrapped.replace(ph, site)
+    if clean_email:
+        wrapped = wrapped.replace("{email}", clean_email).replace("{{email}}", clean_email)
     return wrapped
+
+
+def apply_unsubscribe_header(msg, reply_to):
+    """Gmail looks for this header on bulk mail. It matches the reply line in the letter."""
+    addr = (reply_to or "").strip()
+    if not addr or "@" not in addr:
+        return
+    msg["List-Unsubscribe"] = f"<mailto:{addr}?subject=Unsubscribe>"
 
 class EmailMarketingManager:
     def __init__(self):
@@ -928,7 +915,7 @@ class EmailMarketingManager:
         msg["Reply-To"] = reply_to
         msg["Date"] = formatdate(localtime=True)
         msg["Message-ID"] = make_msgid(domain=domain)
-        msg["MIME-Version"] = "1.0"
+        apply_unsubscribe_header(msg, reply_to)
         
         if plain_processed:
             msg.attach(MIMEText(plain_processed, "plain", "utf-8"))
@@ -1216,7 +1203,7 @@ class EmailMarketingManager:
                 msg["Reply-To"] = reply_to
                 msg["Date"] = formatdate(localtime=True)
                 msg["Message-ID"] = make_msgid(domain=domain)
-                msg["MIME-Version"] = "1.0"
+                apply_unsubscribe_header(msg, reply_to)
                 
                 msg.attach(MIMEText(plain_body, "plain", "utf-8"))
                 msg.attach(MIMEText(html_body, "html", "utf-8"))

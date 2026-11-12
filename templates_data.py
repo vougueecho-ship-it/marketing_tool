@@ -61,7 +61,8 @@ def render_template_dict(tpl, bonus="$5 Freeplay", min_cashout="$35"):
     }
 
 def get_email_html(note, link="https://winningheaven.com"):
-    """A short plain letter. One link, no banner, no button, no keyword stuffing."""
+    """A short plain letter. One real site link, shown as that same address."""
+    label = re.sub(r"^https?://", "", link).strip().rstrip("/") or link
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -72,7 +73,7 @@ def get_email_html(note, link="https://winningheaven.com"):
 <div style="font-family:Arial, Helvetica, sans-serif;font-size:15px;line-height:1.55;color:#222222;max-width:520px;">
 <p style="margin:0 0 12px;">Hi,</p>
 <p style="margin:0 0 12px;">{note}</p>
-<p style="margin:0 0 12px;"><a href="{link}" style="color:#1155cc;">{link}</a></p>
+<p style="margin:0 0 12px;"><a href="{link}" style="color:#1155cc;">{label}</a></p>
 <p style="margin:0;">Thank you,<br>Winning Heaven</p>
 <p style="margin:16px 0 0;font-size:12px;color:#888888;">Reply Unsubscribe if you do not want these notes.</p>
 </div>
