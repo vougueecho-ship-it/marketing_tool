@@ -14,6 +14,20 @@ import urllib.parse
 import urllib.request
 
 # ==================== DYNAMIC PLACEHOLDER HELPER ====================
+def format_offer_labels(bonus, cashout):
+    """Freeplay amounts read as '3 Fp'. Cashout reads as '$35 CO'."""
+    raw_bonus = str(bonus or "3 Fp").strip()
+    bonus_num = re.search(r"(\d+)", raw_bonus)
+    if bonus_num and re.search(r"free\s*play|\bfp\b", raw_bonus, re.I):
+        b_val = f"{bonus_num.group(1)} Fp"
+    else:
+        b_val = raw_bonus
+
+    raw_co = str(cashout or "$35").strip()
+    co_num = re.search(r"(\d+)", raw_co)
+    c_val = f"${co_num.group(1)} CO" if co_num else raw_co
+    return b_val, c_val
+
 def render_template_vars(text, bonus="$5 Freeplay", min_cashout="$35"):
     """
     Replaces {daily_bonus}, {bonus}, {freeplay}, {min_cashout}, {cashout}
@@ -22,14 +36,13 @@ def render_template_vars(text, bonus="$5 Freeplay", min_cashout="$35"):
     if not text or not isinstance(text, str):
         return text
     
-    b_val = str(bonus or "$5 Freeplay").strip()
-    c_val = str(min_cashout or "$35").strip()
-    
+    b_val, c_val = format_offer_labels(bonus, min_cashout)
+    big_co = f'<strong style="font-size:22px;">{c_val}</strong>'
+
     # Replace bonus placeholders safely (using lambda to prevent $1, $10 regex backreference issues)
+    text = re.sub(r'\{{1,2}co_big\}{1,2}', lambda m: big_co, text, flags=re.IGNORECASE)
     text = re.sub(r'\{{1,2}(?:daily_)?bonus\}{1,2}', lambda m: b_val, text, flags=re.IGNORECASE)
     text = re.sub(r'\{{1,2}freeplay(?:_amount)?\}{1,2}', lambda m: b_val, text, flags=re.IGNORECASE)
-    
-    # Replace cashout placeholders safely
     text = re.sub(r'\{{1,2}(?:min(?:imum)?_)?cashout\}{1,2}', lambda m: c_val, text, flags=re.IGNORECASE)
     
     return text
@@ -83,33 +96,33 @@ Reply Unsubscribe if you do not want these notes.
 # Short notes. Same ids so existing drip steps still line up.
 _LETTERS = [
     ("day1_morning_welcome", 1, "Day 1 Morning", "Your account is open",
-     "Your Winning Heaven account is open. {daily_bonus} is on it, and withdrawals start at {min_cashout}. You can open the site in your phone browser."),
+     "Your Winning Heaven account is open. {daily_bonus} is on it. {min_cashout}. You can open the site in your phone browser."),
     ("day1_evening_benefits", 1, "Day 1 Evening", "A quick note",
-     "Just a short note. {daily_bonus} is still on your account, and the smallest withdrawal is {min_cashout}."),
+     "Just a short note. {daily_bonus} is still on your account. {min_cashout}."),
     ("day2_morning_platform", 2, "Day 2 Morning", "You can play in the browser",
      "You do not need an app. Open the site in Safari or Chrome. {daily_bonus} is there if you want it."),
-    ("day2_evening_concierge", 2, "Day 2 Evening", "About withdrawals",
-     "Withdrawals start at {min_cashout}. If you need a hand with the account, reply to this email."),
+    ("day2_evening_concierge", 2, "Day 2 Evening", "About your account",
+     "{min_cashout}. If you need a hand with the account, reply to this email."),
     ("day3_morning_loyalty", 3, "Day 3 Morning", "A small reload",
      "There is another {daily_bonus} on the account today. Nothing else has changed."),
-    ("day3_evening_cashout", 3, "Day 3 Evening", "How a withdrawal works",
-     "When the balance is at least {min_cashout}, you can request a withdrawal. Reply if you want me to walk you through it."),
+    ("day3_evening_cashout", 3, "Day 3 Evening", "Your balance",
+     "When the balance reaches {min_cashout}, reply to this email and I will help."),
     ("day4_morning_midweek", 4, "Day 4 Morning", "A few games are live",
      "Fire Kirin, Orion Stars, and Juwa are on the site. {daily_bonus} is on the account if you want to try them."),
     ("day4_evening_reengage", 4, "Day 4 Evening", "Checking in",
-     "Checking in. Your account is still open, and withdrawals still start at {min_cashout}."),
+     "Checking in. Your account is still open. {min_cashout}."),
     ("day5_morning_games", 5, "Day 5 Morning", "Before the weekend",
      "{daily_bonus} is on the account for the weekend. The site opens in the phone browser."),
     ("day5_evening_weekend_kickoff", 5, "Day 5 Evening", "Friday note",
-     "Friday note. The account is ready whenever you are. Smallest withdrawal is {min_cashout}."),
+     "Friday note. The account is ready whenever you are. {min_cashout}."),
     ("day6_morning_saturday", 6, "Day 6 Morning", "Saturday note",
      "Saturday note. {daily_bonus} is still sitting on the account."),
     ("day6_evening_saturday", 6, "Day 6 Evening", "Saturday evening",
-     "The tables are open this evening. Withdrawals start at {min_cashout}."),
+     "The tables are open this evening. {min_cashout}."),
     ("day7_morning_sunday", 7, "Day 7 Morning", "Sunday note",
      "Sunday note. {daily_bonus} is on the account, same as the rest of the week."),
     ("day7_evening_vip_retention", 7, "Day 7 Evening", "Your account is still open",
-     "Your account is still open and the {min_cashout} withdrawal minimum has not changed."),
+     "Your account is still open. {min_cashout}."),
     ("flash_daily_bonus_drop", 1, "Daily note", "Something is on your account",
      "I added {daily_bonus} to your account. You can use it whenever you open the site."),
     ("winback_reclaim_offer", 1, "We have not heard from you", "It has been a while",
@@ -125,7 +138,7 @@ for tpl_id, stage, name, subject, note in _LETTERS:
         "subject": subject,
         "preview_text": note,
         "plain_text": get_email_plain(note),
-        "html": get_email_html(note),
+        "html": get_email_html(note.replace("{min_cashout}", "{co_big}")),
         "inbox_score": 100,
         "spam_status": "Short plain letter",
     })
@@ -193,19 +206,22 @@ def build_ai_template_from_copy(copy, prompt, bonus="$5 Freeplay", min_cashout="
     link = (target_url or "https://winningheaven.com").strip()
     if not link.startswith("http"):
         link = "https://winningheaven.com"
-    b_val = str(bonus or "$5 Freeplay").strip()
-    c_val = str(min_cashout or "$35").strip()
+    b_val, c_val = format_offer_labels(bonus, min_cashout)
     first_line = (prompt or "VIP offer").strip().split("\n")[0]
 
     subject = _clean_copy(copy.get("subject"), 90) or f"Your Winning Heaven access is ready — {b_val}"
-    preview = _clean_copy(copy.get("preview_text"), 140) or f"{b_val} is ready, with cashouts from {c_val}."
+    preview = _clean_copy(copy.get("preview_text"), 140) or f"{b_val} is ready. {c_val}."
     greeting = _clean_copy(copy.get("greeting"), 40) or "Hello"
     paragraphs = [_clean_copy(p, 420) for p in (copy.get("paragraphs") or []) if _clean_copy(p, 420)]
     if not paragraphs:
-        paragraphs = [f"Your Winning Heaven account is ready. {b_val} is available, and cashouts start at {c_val}."]
+        paragraphs = [f"Your Winning Heaven account is ready. {b_val} is available. {c_val}."]
     paragraphs = paragraphs[:2]
     note = " ".join(paragraphs)
-    html_doc = get_email_html(_esc(note), link=link)
+    html_doc = get_email_html(_esc(note), link=link).replace(
+        _esc(c_val),
+        f'<strong style="font-size:22px;">{_esc(c_val)}</strong>',
+        1,
+    )
     plain = get_email_plain(note, link=link)
     tpl_id = f"custom_{uuid.uuid4().hex[:8]}"
     return {
@@ -231,13 +247,12 @@ def generate_ai_email_template(prompt, tone="vip", bonus="$5 Freeplay", min_cash
         "urgent": "Clear and time-sensitive, but not spammy. No ALL CAPS, no excessive exclamation marks, no words like winner guaranteed.",
         "friendly": "Warm and conversational, like a helpful host texting a regular player.",
     }.get(tone, "Polished and clear.")
-    b_val = str(bonus or "$5 Freeplay").strip()
-    c_val = str(min_cashout or "$35").strip()
+    b_val, c_val = format_offer_labels(bonus, min_cashout)
 
     instruction = f"""Write a very short email for Winning Heaven, like a person sent a note.
 The user may write in Roman Urdu, Urdu, or English. Reply in plain English only.
 Tone: {tone_guide}
-You may mention this offer once if it fits: {b_val}, withdrawals from {c_val}.
+You may mention this offer once if it fits: {b_val} and {c_val}. Do not write the word withdrawal.
 Do not use a subject with Free, Winner, Cash, Bonus, VIP, or emoji.
 Two short sentences in total. No list. No URL.
 Return only JSON:
@@ -258,9 +273,8 @@ User request:
 def generate_custom_template(prompt, tone="vip", offer_headline="", bonus="$5 Freeplay", min_cashout="$35"):
     raw_prompt = prompt.strip() if prompt else "Your account is open."
     first_line = raw_prompt.split("\n")[0]
-    b_val = str(bonus or "$5 Freeplay").strip()
-    c_val = str(min_cashout or "$35").strip()
-    note = f"{raw_prompt} {b_val} is on the account, and withdrawals start at {c_val}."
+    b_val, c_val = format_offer_labels(bonus, min_cashout)
+    note = f"{raw_prompt} {b_val} is on the account. {c_val}."
     subject = first_line[:48]
     tpl_id = f"custom_{uuid.uuid4().hex[:8]}"
     return {
@@ -270,7 +284,11 @@ def generate_custom_template(prompt, tone="vip", offer_headline="", bonus="$5 Fr
         "subject": subject,
         "preview_text": note[:140],
         "plain_text": get_email_plain(note),
-        "html": get_email_html(note),
+        "html": get_email_html(note).replace(
+            html.escape(c_val),
+            f'<strong style="font-size:22px;">{html.escape(c_val)}</strong>',
+            1,
+        ),
         "inbox_score": 100,
         "spam_status": "Short plain letter",
     }

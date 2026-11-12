@@ -524,8 +524,10 @@ def render_template_vars(text, bonus="$5 Freeplay", min_cashout="$35"):
     """
     if not text or not isinstance(text, str):
         return text
-    b_val = str(bonus or "$5 Freeplay").strip()
-    c_val = str(min_cashout or "$35").strip()
+    from templates_data import format_offer_labels
+    b_val, c_val = format_offer_labels(bonus, min_cashout)
+    big_co = f'<strong style="font-size:22px;">{c_val}</strong>'
+    text = re.sub(r'\{{1,2}co_big\}{1,2}', lambda m: big_co, text, flags=re.IGNORECASE)
     text = re.sub(r'\{{1,2}(?:daily_)?bonus\}{1,2}', lambda m: b_val, text, flags=re.IGNORECASE)
     text = re.sub(r'\{{1,2}freeplay(?:_amount)?\}{1,2}', lambda m: b_val, text, flags=re.IGNORECASE)
     text = re.sub(r'\{{1,2}(?:min(?:imum)?_)?cashout\}{1,2}', lambda m: c_val, text, flags=re.IGNORECASE)
