@@ -74,7 +74,7 @@ def get_email_html(note, link="https://winningheaven.com"):
 <p style="margin:0 0 12px;">Hi,</p>
 <p style="margin:0 0 12px;">{note}</p>
 <p style="margin:0 0 12px;"><a href="{link}" style="color:#1155cc;">{label}</a></p>
-<p style="margin:0;">Thank you,<br>Winning Heaven</p>
+<p style="margin:0;">Thank you,<br>Player Paradise</p>
 <p style="margin:16px 0 0;font-size:12px;color:#888888;">Reply Unsubscribe if you do not want these notes.</p>
 </div>
 </body>
@@ -88,7 +88,7 @@ def get_email_plain(note, link="https://winningheaven.com"):
 {link}
 
 Thank you,
-Winning Heaven
+Player Paradise
 
 Reply Unsubscribe if you do not want these notes.
 """
@@ -96,7 +96,7 @@ Reply Unsubscribe if you do not want these notes.
 # Short notes. Same ids so existing drip steps still line up.
 _LETTERS = [
     ("day1_morning_welcome", 1, "Day 1 Morning", "Your account is open",
-     "Your Winning Heaven account is open. {daily_bonus} is on it. {min_cashout}. You can open the site in your phone browser."),
+     "Your Player Paradise account is open. {daily_bonus} is on it. {min_cashout}. You can open the site in your phone browser."),
     ("day1_evening_benefits", 1, "Day 1 Evening", "A quick note",
      "Just a short note. {daily_bonus} is still on your account. {min_cashout}."),
     ("day2_morning_platform", 2, "Day 2 Morning", "You can play in the browser",
@@ -209,12 +209,12 @@ def build_ai_template_from_copy(copy, prompt, bonus="$5 Freeplay", min_cashout="
     b_val, c_val = format_offer_labels(bonus, min_cashout)
     first_line = (prompt or "VIP offer").strip().split("\n")[0]
 
-    subject = _clean_copy(copy.get("subject"), 90) or f"Your Winning Heaven access is ready — {b_val}"
+    subject = _clean_copy(copy.get("subject"), 90) or f"Your Player Paradise access is ready — {b_val}"
     preview = _clean_copy(copy.get("preview_text"), 140) or f"{b_val} is ready. {c_val}."
     greeting = _clean_copy(copy.get("greeting"), 40) or "Hello"
     paragraphs = [_clean_copy(p, 420) for p in (copy.get("paragraphs") or []) if _clean_copy(p, 420)]
     if not paragraphs:
-        paragraphs = [f"Your Winning Heaven account is ready. {b_val} is available. {c_val}."]
+        paragraphs = [f"Your Player Paradise account is ready. {b_val} is available. {c_val}."]
     paragraphs = paragraphs[:2]
     note = " ".join(paragraphs)
     html_doc = get_email_html(_esc(note), link=link)
@@ -245,7 +245,7 @@ def generate_ai_email_template(prompt, tone="vip", bonus="$5 Freeplay", min_cash
     }.get(tone, "Polished and clear.")
     b_val, c_val = format_offer_labels(bonus, min_cashout)
 
-    instruction = f"""Write a very short email for Winning Heaven, like a person sent a note.
+    instruction = f"""Write a very short email for Player Paradise, like a person sent a note.
 The user may write in Roman Urdu, Urdu, or English. Reply in plain English only.
 Tone: {tone_guide}
 You may mention this offer once if it fits: {b_val} and {c_val}. Do not write the word withdrawal.

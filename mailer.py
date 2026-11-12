@@ -587,6 +587,20 @@ def wrap_tracking_links(content, recipient_email, tracking_base_url=None, target
     return wrapped
 
 
+def align_player_paradise(from_addr, from_name, subject, html_body, plain_body):
+    """Mail from playersparadisehub.com should say Player Paradise. The site link stays winningheaven.com."""
+    domain = from_addr.split("@")[-1].lower() if from_addr and "@" in from_addr else ""
+    if domain != "playersparadisehub.com":
+        return from_name, subject, html_body, plain_body
+
+    def swap(text):
+        if not text:
+            return text
+        return text.replace("Winning Heaven", "Player Paradise")
+
+    return "Player Paradise", swap(subject), swap(html_body), swap(plain_body)
+
+
 def apply_unsubscribe_header(msg, reply_to):
     """Gmail looks for this header on bulk mail. It matches the reply line in the letter."""
     addr = (reply_to or "").strip()
@@ -905,6 +919,9 @@ class EmailMarketingManager:
 
         html_processed = wrap_tracking_links(final_html, to_email, tracking_url, target_url)
         plain_processed = wrap_tracking_links(final_plain, to_email, tracking_url, target_url)
+        from_name, final_subject, html_processed, plain_processed = align_player_paradise(
+            from_addr, from_name, final_subject, html_processed, plain_processed
+        )
 
         domain = from_addr.split("@")[-1] if "@" in from_addr else "winningheaven.com"
         
@@ -1193,6 +1210,9 @@ class EmailMarketingManager:
 
                 html_body = wrap_tracking_links(final_html, to_email, tracking_url, target_url)
                 plain_body = wrap_tracking_links(final_plain, to_email, tracking_url, target_url)
+                from_name, final_subject, html_body, plain_body = align_player_paradise(
+                    from_addr, from_name, final_subject, html_body, plain_body
+                )
 
                 domain = from_addr.split("@")[-1] if "@" in from_addr else "winningheaven.com"
                 
