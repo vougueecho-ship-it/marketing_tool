@@ -587,18 +587,81 @@ def wrap_tracking_links(content, recipient_email, tracking_base_url=None, target
     return wrapped
 
 
-def align_player_paradise(from_addr, from_name, subject, html_body, plain_body):
-    """Mail from playersparadisehub.com should say Player Paradise. The site link stays winningheaven.com."""
-    domain = from_addr.split("@")[-1].lower() if from_addr and "@" in from_addr else ""
-    if domain != "playersparadisehub.com":
-        return from_name, subject, html_body, plain_body
+_BRAND_WORDS = (
+    "players", "player", "paradise", "winning", "heaven", "casino", "royal",
+    "lucky", "luck", "club", "gold", "vip", "bets", "bet", "wins", "win",
+    "stars", "star", "games", "game", "play", "king", "queen", "cash",
+    "jackpot", "slots", "slot", "spins", "spin", "palace", "world", "zone",
+    "city", "house", "spot", "land", "island", "fortune", "fortunes", "mega",
+    "super", "ultra", "prime", "elite", "diamond", "diamonds", "crown",
+    "empire", "legend", "legends", "magic", "wild", "vegas", "poker",
+    "bingo", "bonus", "rewards", "reward", "social", "plus", "live",
+)
+_BRAND_SUFFIXES = ("hub", "mail", "email", "official", "online", "app")
+
+
+def brand_from_address(from_addr):
+    """Readable name from the sender domain. playersparadisehub.com -> Players Paradise."""
+    raw = (from_addr or "").strip().lower()
+    host = raw.split("@")[-1] if "@" in raw else raw
+    if host.startswith("www."):
+        host = host[4:]
+    for suffix in ("co.uk", "com.au", "co.nz", "com.br", "co.za"):
+        if host.endswith("." + suffix):
+            host = host[: -(len(suffix) + 1)]
+            break
+    else:
+        if "." in host:
+            host = host.rsplit(".", 1)[0]
+    token = host.split(".")[-1]
+    token = re.sub(r"[^a-z0-9_-]", "", token)
+    for suffix in _BRAND_SUFFIXES:
+        if token.endswith(suffix) and len(token) - len(suffix) >= 4:
+            token = token[: -len(suffix)]
+            break
+    if not token:
+        return "Player Paradise"
+
+    def cover(part):
+        words = []
+        i = 0
+        while i < len(part):
+            match = ""
+            for word in _BRAND_WORDS:
+                if part.startswith(word, i) and len(word) > len(match):
+                    match = word
+            if not match:
+                return None
+            words.append(match)
+            i += len(match)
+        return words
+
+    rendered = []
+    for part in re.split(r"[-_]+", token):
+        if not part:
+            continue
+        words = cover(part)
+        if words:
+            rendered.extend(word.capitalize() for word in words)
+        else:
+            rendered.append(part.capitalize())
+    return " ".join(rendered) or "Player Paradise"
+
+
+def apply_sender_brand(from_addr, from_name, subject, html_body, plain_body):
+    """The name inside the letter follows whichever domain sent it. The site link is left as written."""
+    brand = brand_from_address(from_addr)
 
     def swap(text):
         if not text:
             return text
-        return text.replace("Winning Heaven", "Player Paradise")
+        text = text.replace("{brand}", brand).replace("{{brand}}", brand)
+        text = text.replace("Winning Heaven", brand)
+        text = text.replace("Player Paradise", brand)
+        text = text.replace("Players Paradise", brand)
+        return text
 
-    return "Player Paradise", swap(subject), swap(html_body), swap(plain_body)
+    return brand, swap(subject), swap(html_body), swap(plain_body)
 
 
 def apply_unsubscribe_header(msg, reply_to):
@@ -919,7 +982,7 @@ class EmailMarketingManager:
 
         html_processed = wrap_tracking_links(final_html, to_email, tracking_url, target_url)
         plain_processed = wrap_tracking_links(final_plain, to_email, tracking_url, target_url)
-        from_name, final_subject, html_processed, plain_processed = align_player_paradise(
+        from_name, final_subject, html_processed, plain_processed = apply_sender_brand(
             from_addr, from_name, final_subject, html_processed, plain_processed
         )
 
@@ -1210,7 +1273,7 @@ class EmailMarketingManager:
 
                 html_body = wrap_tracking_links(final_html, to_email, tracking_url, target_url)
                 plain_body = wrap_tracking_links(final_plain, to_email, tracking_url, target_url)
-                from_name, final_subject, html_body, plain_body = align_player_paradise(
+                from_name, final_subject, html_body, plain_body = apply_sender_brand(
                     from_addr, from_name, final_subject, html_body, plain_body
                 )
 

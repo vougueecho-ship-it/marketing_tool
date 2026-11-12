@@ -603,6 +603,69 @@ document.addEventListener('DOMContentLoaded', () => {
       .replace(/'/g, '&#039;');
   }
 
+  const BRAND_WORDS = ['players', 'player', 'paradise', 'winning', 'heaven', 'casino', 'royal', 'lucky', 'luck', 'club', 'gold', 'vip', 'bets', 'bet', 'wins', 'win', 'stars', 'star', 'games', 'game', 'play', 'king', 'queen', 'cash', 'jackpot', 'slots', 'slot', 'spins', 'spin', 'palace', 'world', 'zone', 'city', 'house', 'spot', 'land', 'island', 'fortune', 'fortunes', 'mega', 'super', 'ultra', 'prime', 'elite', 'diamond', 'diamonds', 'crown', 'empire', 'legend', 'legends', 'magic', 'wild', 'vegas', 'poker', 'bingo', 'bonus', 'rewards', 'reward', 'social', 'plus', 'live'];
+  const BRAND_SUFFIXES = ['hub', 'mail', 'email', 'official', 'online', 'app'];
+
+  function brandFromAddress(fromAddr) {
+    let host = String(fromAddr || '').trim().toLowerCase();
+    host = host.includes('@') ? host.split('@').pop() : host;
+    if (host.startsWith('www.')) host = host.slice(4);
+    ['co.uk', 'com.au', 'co.nz', 'com.br', 'co.za'].forEach(suffix => {
+      if (host.endsWith('.' + suffix)) host = host.slice(0, -(suffix.length + 1));
+    });
+    if (host.includes('.')) host = host.slice(0, host.lastIndexOf('.'));
+    let token = host.split('.').pop().replace(/[^a-z0-9_-]/g, '');
+    BRAND_SUFFIXES.forEach(suffix => {
+      if (token.endsWith(suffix) && token.length - suffix.length >= 4) token = token.slice(0, -suffix.length);
+    });
+    if (!token) return 'Player Paradise';
+    const cover = (part) => {
+      const words = [];
+      let i = 0;
+      while (i < part.length) {
+        let match = '';
+        BRAND_WORDS.forEach(word => {
+          if (part.startsWith(word, i) && word.length > match.length) match = word;
+        });
+        if (!match) return null;
+        words.push(match);
+        i += match.length;
+      }
+      return words;
+    };
+    const rendered = [];
+    token.split(/[-_]+/).forEach(part => {
+      if (!part) return;
+      const words = cover(part);
+      if (words) words.forEach(word => rendered.push(word.charAt(0).toUpperCase() + word.slice(1)));
+      else rendered.push(part.charAt(0).toUpperCase() + part.slice(1));
+    });
+    return rendered.join(' ') || 'Player Paradise';
+  }
+
+  function currentBrand() {
+    let email = '';
+    if (typeof senderAccounts !== 'undefined' && ctrlSenderAccountSelect && ctrlSenderAccountSelect.value !== 'auto') {
+      const acc = senderAccounts.find(item => String(item.id) === String(ctrlSenderAccountSelect.value));
+      email = acc ? acc.sender_email : '';
+    }
+    if (!email && typeof senderAccounts !== 'undefined') {
+      const ready = senderAccounts.find(item => item.enabled && item.sent_today < item.daily_limit) || senderAccounts[0];
+      email = ready ? ready.sender_email : '';
+    }
+    return brandFromAddress(email);
+  }
+
+  function applyBrand(text) {
+    const brand = currentBrand();
+    return String(text || '')
+      .replaceAll('{brand}', brand)
+      .replaceAll('{{brand}}', brand)
+      .replaceAll('Winning Heaven', brand)
+      .replaceAll('Player Paradise', brand)
+      .replaceAll('Players Paradise', brand);
+  }
+
   function renderDripStageCards() {
     const navContainer = document.getElementById('drip-stages-nav-container') || document.querySelector('.drip-stages-nav');
     if (!navContainer) return;
@@ -635,7 +698,7 @@ document.addEventListener('DOMContentLoaded', () => {
       card.innerHTML = `
         <div class="stage-number">${badge}</div>
         <h4>${escapeHtml(tpl.name)}</h4>
-        <p>${escapeHtml(tpl.preview_text || 'Primary Inbox Verified')}</p>
+        <p>${escapeHtml(applyBrand(tpl.preview_text || 'Primary Inbox Verified'))}</p>
       `;
 
       card.addEventListener('click', () => {
@@ -759,8 +822,15 @@ document.addEventListener('DOMContentLoaded', () => {
   function updatePreview(html) {
     const doc = previewIframe.contentDocument || previewIframe.contentWindow.document;
     doc.open();
-    doc.write(html);
+    doc.write(applyBrand(html));
     doc.close();
+  }
+
+  if (ctrlSenderAccountSelect) {
+    ctrlSenderAccountSelect.addEventListener('change', () => {
+      if (typeof renderDripStageCards === 'function') renderDripStageCards();
+      if (editorHtml && editorHtml.value) updatePreview(editorHtml.value);
+    });
   }
 
   // ==================== DAILY BONUS & CASHOUT OFFER MANAGER ====================
@@ -1525,6 +1595,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const data = await res.json();
       if (data.success) {
         senderAccounts = data.accounts || [];
+        if (typeof renderDripStageCards === 'function') renderDripStageCards();
+        if (editorHtml && editorHtml.value) updatePreview(editorHtml.value);
         renderSenderAccounts();
       }
     } catch (err) {
