@@ -10,6 +10,7 @@ import sqlite3
 import socket
 import threading
 import logging
+import html
 import urllib.parse
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -153,6 +154,11 @@ def init_db():
     if "sender_email" not in cols:
         try:
             cursor.execute("ALTER TABLE recipients ADD COLUMN sender_email TEXT")
+        except Exception:
+            pass
+    if "lead_name" not in cols:
+        try:
+            cursor.execute("ALTER TABLE recipients ADD COLUMN lead_name TEXT")
         except Exception:
             pass
 
@@ -393,36 +399,89 @@ EXCLUDED_STAFF_EMAILS = {
     "jackpotroyals604@gmail.com",
 }
 
-def parse_emails_from_file(full_path):
-    emails = []
+_NAME_HEADERS = {"name", "first name", "firstname", "first_name", "full name", "fullname", "full_name"}
+_SKIP_NAMES = {"info", "admin", "support", "sales", "noreply", "no", "contact", "hello", "mail", "email", "team", "office", "user"}
+
+def clean_lead_name(raw):
+    text = re.sub(r"\s+", " ", str(raw or "")).strip()
+    text = re.sub(r"[^A-Za-z .'-]", "", text)
+    parts = [part.strip(".'-") for part in text.split() if part.strip(".'-")]
+    if not parts:
+        return ""
+    first = parts[0]
+    if len(first) < 2 or first.lower() in _SKIP_NAMES:
+        return ""
+    if first.isupper() or first.islower():
+        first = first.capitalize()
+    return first[:40]
+
+def name_from_email(email):
+    local = str(email or "").split("@", 1)[0]
+    local = re.sub(r"\d+", " ", local)
+    local = re.sub(r"[._+\-]+", " ", local)
+    return clean_lead_name(local)
+
+def _looks_like_email(value):
+    clean = str(value or "").strip().lower()
+    return "@" in clean and "." in clean and clean not in EXCLUDED_STAFF_EMAILS
+
+def _leads_from_rows(rows):
+    leads = []
+    seen = set()
+    name_idx = None
+    started = False
+    for row in rows:
+        cells = ["" if cell is None else str(cell).strip() for cell in row]
+        if not any(cells):
+            continue
+        if not started:
+            headers = [cell.lower() for cell in cells]
+            if any(header in _NAME_HEADERS for header in headers):
+                for idx, header in enumerate(headers):
+                    if header in _NAME_HEADERS:
+                        name_idx = idx
+                        break
+                started = True
+                continue
+        email = ""
+        for cell in cells:
+            if _looks_like_email(cell):
+                email = cell.strip().lower()
+                break
+        if not email or email in seen:
+            continue
+        seen.add(email)
+        raw_name = ""
+        if name_idx is not None and name_idx < len(cells):
+            raw_name = cells[name_idx]
+        if not raw_name:
+            for cell in cells:
+                if cell and not _looks_like_email(cell):
+                    raw_name = cell
+                    break
+        name = clean_lead_name(raw_name) or name_from_email(email)
+        leads.append((email, name))
+        started = True
+    return leads
+
+def parse_leads_from_file(full_path):
+    rows = []
     ext = os.path.splitext(full_path)[1].lower()
-    
-    if ext in [".xlsx", ".xls"]:
-        try:
+    try:
+        if ext in [".xlsx", ".xls"]:
             wb = openpyxl.load_workbook(full_path, data_only=True)
             sheet = wb.active
-            for row in sheet.iter_rows(values_only=True):
-                for cell in row:
-                    if cell and isinstance(cell, str):
-                        clean = cell.strip().lower()
-                        if "@" in clean and "." in clean and clean not in EXCLUDED_STAFF_EMAILS:
-                            emails.append(clean)
-        except Exception as e:
-            log_event(f"Error parsing Excel {full_path}: {str(e)}", level="ERROR")
-    elif ext in [".csv", ".txt"]:
-        try:
-            with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
-                reader = csv.reader(f)
-                for row in reader:
-                    for cell in row:
-                        if cell and isinstance(cell, str):
-                            clean = cell.strip().lower()
-                            if "@" in clean and "." in clean and clean not in EXCLUDED_STAFF_EMAILS:
-                                emails.append(clean)
-        except Exception as e:
-            log_event(f"Error parsing CSV {full_path}: {str(e)}", level="ERROR")
-            
-    return list(dict.fromkeys(emails))
+            rows = list(sheet.iter_rows(values_only=True))
+        elif ext in [".csv", ".txt"]:
+            with open(full_path, "r", encoding="utf-8", errors="ignore") as handle:
+                rows = list(csv.reader(handle))
+    except Exception as exc:
+        log_event(f"Error parsing lead file {full_path}: {exc}", level="ERROR")
+        return []
+    return _leads_from_rows(rows)
+
+def parse_emails_from_file(full_path):
+    return [email for email, _name in parse_leads_from_file(full_path)]
 
 def load_file_recipients(file_name):
     init_db()
@@ -437,17 +496,22 @@ def load_file_recipients(file_name):
         return 0, 0
 
     try:
-        unique_emails = parse_emails_from_file(full_path)
+        leads = parse_leads_from_file(full_path)
         conn = get_db()
         cursor = conn.cursor()
         
         inserted = 0
-        for em in unique_emails:
+        for em, lead_name in leads:
             try:
                 cursor.execute("""
-                    INSERT OR IGNORE INTO recipients (file_name, email, status) 
-                    VALUES (?, ?, 'pending')
-                """, (file_name, em))
+                    INSERT INTO recipients (file_name, email, status, lead_name)
+                    VALUES (?, ?, 'pending', ?)
+                    ON CONFLICT(file_name, email) DO UPDATE SET
+                        lead_name = CASE
+                            WHEN recipients.lead_name IS NULL OR recipients.lead_name = '' THEN excluded.lead_name
+                            ELSE recipients.lead_name
+                        END
+                """, (file_name, em, lead_name))
                 if cursor.rowcount > 0:
                     inserted += 1
             except Exception:
@@ -456,8 +520,8 @@ def load_file_recipients(file_name):
         conn.commit()
         conn.close()
         
-        log_event(f"Loaded {len(unique_emails)} leads for list '{file_name}' ({inserted} newly added)")
-        return len(unique_emails), inserted
+        log_event(f"Loaded {len(leads)} leads for list '{file_name}' ({inserted} newly added)")
+        return len(leads), inserted
     except Exception as e:
         log_event(f"Failed to load lead file {file_name}: {str(e)}", level="ERROR")
         return 0, 0
@@ -662,6 +726,20 @@ def apply_sender_brand(from_addr, from_name, subject, html_body, plain_body):
         return text
 
     return brand, swap(subject), swap(html_body), swap(plain_body)
+
+
+def apply_recipient_name(subject, html_body, plain_body, name):
+    """Put this recipient's first name in the greeting. The site link is not changed."""
+    shown = clean_lead_name(name)
+    html_name = html.escape(shown) if shown else ""
+
+    def fill(text, value):
+        if not text:
+            return text
+        text = text.replace("{name}", value).replace("{{name}}", value)
+        return text.replace("Hi ,", "Hi,")
+
+    return fill(subject, shown), fill(html_body, html_name), fill(plain_body, shown)
 
 
 def apply_unsubscribe_header(msg, reply_to):
@@ -985,6 +1063,9 @@ class EmailMarketingManager:
         from_name, final_subject, html_processed, plain_processed = apply_sender_brand(
             from_addr, from_name, final_subject, html_processed, plain_processed
         )
+        final_subject, html_processed, plain_processed = apply_recipient_name(
+            final_subject, html_processed, plain_processed, name_from_email(to_email)
+        )
 
         domain = from_addr.split("@")[-1] if "@" in from_addr else "winningheaven.com"
         
@@ -1196,7 +1277,7 @@ class EmailMarketingManager:
                 conn = get_db()
                 cursor = conn.cursor()
                 cursor.execute("""
-                    SELECT id, email, attempts 
+                    SELECT id, email, attempts, lead_name
                     FROM recipients 
                     WHERE file_name = ? AND status = 'pending' 
                     ORDER BY id ASC LIMIT 1
@@ -1276,6 +1357,9 @@ class EmailMarketingManager:
                 from_name, final_subject, html_body, plain_body = apply_sender_brand(
                     from_addr, from_name, final_subject, html_body, plain_body
                 )
+                final_subject, html_body, plain_body = apply_recipient_name(
+                    final_subject, html_body, plain_body, row["lead_name"] or name_from_email(to_email)
+                )
 
                 domain = from_addr.split("@")[-1] if "@" in from_addr else "winningheaven.com"
                 
@@ -1312,13 +1396,15 @@ class EmailMarketingManager:
                     consecutive_errors = 0
 
                     if current_acc["sent_today"] >= current_acc["daily_limit"]:
-                        log_event(f"🎯 Account {from_addr} hit limit of {current_acc['daily_limit']} emails/day! Switching to next sender account...", level="INFO")
+                        log_event(f"🎯 Account {from_addr} hit its limit of {current_acc['daily_limit']}. Next sender starts now.", level="INFO")
                         if server:
                             try:
                                 server.quit()
                             except Exception:
                                 pass
                             server = None
+                        current_acc = None
+                        continue
 
                 except (smtplib.SMTPServerDisconnected, smtplib.SMTPConnectError, ssl.SSLError, socket.timeout, socket.error, TimeoutError, OSError) as net_err:
                     log_event(f"🌐 Internet / SMTP reconnecting on {from_addr} ({str(net_err)}). Auto-retrying...", level="WARNING")

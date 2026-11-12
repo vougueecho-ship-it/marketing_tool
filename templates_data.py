@@ -71,7 +71,7 @@ def get_email_html(note, link="https://winningheaven.com"):
 </head>
 <body style="margin:0;padding:12px 8px;background:#ffffff;">
 <div style="font-family:Arial, Helvetica, sans-serif;font-size:15px;line-height:1.55;color:#222222;max-width:520px;">
-<p style="margin:0 0 12px;">Hi,</p>
+<p style="margin:0 0 12px;">Hi {{name}},</p>
 <p style="margin:0 0 12px;">{note}</p>
 <p style="margin:0 0 12px;"><a href="{link}" style="color:#1155cc;">{label}</a></p>
 <p style="margin:0;">Thank you,<br>{{brand}}</p>
@@ -81,7 +81,7 @@ def get_email_html(note, link="https://winningheaven.com"):
 </html>"""
 
 def get_email_plain(note, link="https://winningheaven.com"):
-    return f"""Hi,
+    return f"""Hi {{name}},
 
 {note}
 
