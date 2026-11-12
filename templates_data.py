@@ -15,7 +15,7 @@ import urllib.request
 
 # ==================== DYNAMIC PLACEHOLDER HELPER ====================
 def format_offer_labels(bonus, cashout):
-    """Freeplay amounts read as '3 Fp'. Cashout reads as '$35 CO'."""
+    """Freeplay amounts read as '3 Fp'. Cashout reads as '35 CO', same size as the sentence."""
     raw_bonus = str(bonus or "3 Fp").strip()
     bonus_num = re.search(r"(\d+)", raw_bonus)
     if bonus_num and re.search(r"free\s*play|\bfp\b", raw_bonus, re.I):
@@ -25,7 +25,7 @@ def format_offer_labels(bonus, cashout):
 
     raw_co = str(cashout or "$35").strip()
     co_num = re.search(r"(\d+)", raw_co)
-    c_val = f"${co_num.group(1)} CO" if co_num else raw_co
+    c_val = f"{co_num.group(1)} CO" if co_num else raw_co
     return b_val, c_val
 
 def render_template_vars(text, bonus="$5 Freeplay", min_cashout="$35"):
@@ -37,10 +37,9 @@ def render_template_vars(text, bonus="$5 Freeplay", min_cashout="$35"):
         return text
     
     b_val, c_val = format_offer_labels(bonus, min_cashout)
-    big_co = f'<strong style="font-size:22px;">{c_val}</strong>'
 
     # Replace bonus placeholders safely (using lambda to prevent $1, $10 regex backreference issues)
-    text = re.sub(r'\{{1,2}co_big\}{1,2}', lambda m: big_co, text, flags=re.IGNORECASE)
+    text = re.sub(r'\{{1,2}co_big\}{1,2}', lambda m: c_val, text, flags=re.IGNORECASE)
     text = re.sub(r'\{{1,2}(?:daily_)?bonus\}{1,2}', lambda m: b_val, text, flags=re.IGNORECASE)
     text = re.sub(r'\{{1,2}freeplay(?:_amount)?\}{1,2}', lambda m: b_val, text, flags=re.IGNORECASE)
     text = re.sub(r'\{{1,2}(?:min(?:imum)?_)?cashout\}{1,2}', lambda m: c_val, text, flags=re.IGNORECASE)
@@ -138,7 +137,7 @@ for tpl_id, stage, name, subject, note in _LETTERS:
         "subject": subject,
         "preview_text": note,
         "plain_text": get_email_plain(note),
-        "html": get_email_html(note.replace("{min_cashout}", "{co_big}")),
+        "html": get_email_html(note),
         "inbox_score": 100,
         "spam_status": "Short plain letter",
     })
@@ -217,11 +216,7 @@ def build_ai_template_from_copy(copy, prompt, bonus="$5 Freeplay", min_cashout="
         paragraphs = [f"Your Winning Heaven account is ready. {b_val} is available. {c_val}."]
     paragraphs = paragraphs[:2]
     note = " ".join(paragraphs)
-    html_doc = get_email_html(_esc(note), link=link).replace(
-        _esc(c_val),
-        f'<strong style="font-size:22px;">{_esc(c_val)}</strong>',
-        1,
-    )
+    html_doc = get_email_html(_esc(note), link=link)
     plain = get_email_plain(note, link=link)
     tpl_id = f"custom_{uuid.uuid4().hex[:8]}"
     return {
@@ -284,11 +279,7 @@ def generate_custom_template(prompt, tone="vip", offer_headline="", bonus="$5 Fr
         "subject": subject,
         "preview_text": note[:140],
         "plain_text": get_email_plain(note),
-        "html": get_email_html(note).replace(
-            html.escape(c_val),
-            f'<strong style="font-size:22px;">{html.escape(c_val)}</strong>',
-            1,
-        ),
+        "html": get_email_html(note),
         "inbox_score": 100,
         "spam_status": "Short plain letter",
     }

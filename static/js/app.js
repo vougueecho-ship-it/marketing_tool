@@ -822,8 +822,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (num && /free\s*play|\bfp\b/i.test(raw)) return num[1] + ' Fp';
       return raw || '3 Fp';
     }
-    if (num) return '$' + num[1] + ' CO';
-    return raw || '$35 CO';
+    if (num) return num[1] + ' CO';
+    return raw || '35 CO';
   }
 
   // Load Active Offer from Configuration
@@ -832,7 +832,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const res = await fetch('/api/config');
       const cfg = await res.json();
       const bonus = formatOfferLabel('bonus', cfg.daily_bonus || '3 Fp');
-      const cashout = formatOfferLabel('cashout', cfg.min_cashout || '$35 CO');
+      const cashout = formatOfferLabel('cashout', cfg.min_cashout || '35 CO');
 
       if (ctrlDailyBonus) ctrlDailyBonus.value = bonus;
       if (ctrlMinCashout) ctrlMinCashout.value = cashout;
@@ -854,7 +854,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (btnSaveOffer) {
     btnSaveOffer.addEventListener('click', async () => {
       const bonus = ctrlDailyBonus ? ctrlDailyBonus.value.trim() : '3 Fp';
-      const cashout = ctrlMinCashout ? ctrlMinCashout.value.trim() : '$35 CO';
+      const cashout = ctrlMinCashout ? ctrlMinCashout.value.trim() : '35 CO';
 
       if (!bonus || !cashout) {
         alert('Please specify both a Bonus offer and a Minimum Cashout amount.');
@@ -1446,7 +1446,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('cfg-daily-bonus').value = formatOfferLabel('bonus', cfg.daily_bonus || '3 Fp');
       }
       if (document.getElementById('cfg-min-cashout')) {
-        document.getElementById('cfg-min-cashout').value = formatOfferLabel('cashout', cfg.min_cashout || '$35 CO');
+        document.getElementById('cfg-min-cashout').value = formatOfferLabel('cashout', cfg.min_cashout || '35 CO');
       }
       if (document.getElementById('cfg-target-url')) {
         document.getElementById('cfg-target-url').value = cfg.target_url || 'https://winningheaven.com';
