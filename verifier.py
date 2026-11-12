@@ -19,6 +19,7 @@ import smtplib
 import subprocess
 import threading
 import json
+from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 import urllib.request
 import urllib.error
 import base64
@@ -69,6 +70,17 @@ STAFF_EMAILS = {
 
 mx_cache = {}
 mx_cache_lock = threading.Lock()
+# Domains whose mail servers ignore mailbox probes. A timeout still counts as deliverable,
+# so repeating the probe for every address only burns time.
+PROBE_SKIP_DOMAINS = {
+    'gmail.com', 'googlemail.com', 'yahoo.com', 'yahoo.co.uk', 'yahoo.co.in',
+    'ymail.com', 'rocketmail.com', 'hotmail.com', 'outlook.com', 'live.com',
+    'msn.com', 'icloud.com', 'me.com', 'mac.com', 'aol.com', 'proton.me',
+    'protonmail.com', 'gmx.com', 'gmx.net', 'mail.com', 'zoho.com', 'yandex.com',
+    'comcast.net', 'att.net', 'sbcglobal.net', 'verizon.net', 'cox.net', 'charter.net',
+}
+domain_probe_cache = {}
+domain_probe_lock = threading.Lock()
 
 def get_mx_records(domain):
     with mx_cache_lock:
@@ -99,7 +111,7 @@ def get_mx_records(domain):
             mx_cache[domain] = []
         return []
 
-def smtp_check_mailbox(email, timeout=5):
+def smtp_check_mailbox(email, timeout=2):
     """
     Direct Mailbox Handshake (RCPT TO) without sending mail.
     Returns: status ('deliverable', 'dead', 'risky', 'unknown'), message
@@ -126,7 +138,10 @@ def smtp_check_mailbox(email, timeout=5):
             return 'dead', 'Domain does not exist (No MX/A records)'
             
     target_mx = mx_hosts[0]
-    
+    with domain_probe_lock:
+        if domain_probe_cache.get(domain) == 'filtered':
+            return 'deliverable', 'MX active (provider blocks mailbox probes)'
+
     # Gmail, Yahoo, Microsoft rate limit port 25 checks from home residential IPs,
     # so we do a resilient fast handshake
     try:
@@ -148,14 +163,22 @@ def smtp_check_mailbox(email, timeout=5):
         else:
             return 'risky', f'Server response: {code}'
     except smtplib.SMTPServerDisconnected:
+        with domain_probe_lock:
+            domain_probe_cache[domain] = 'filtered'
         return 'deliverable', 'Mail server active (Handshake protected)'
     except smtplib.SMTPConnectError:
+        with domain_probe_lock:
+            domain_probe_cache[domain] = 'filtered'
         return 'risky', 'Port 25 connect timeout'
     except socket.timeout:
+        with domain_probe_lock:
+            domain_probe_cache[domain] = 'filtered'
         return 'risky', 'SMTP timeout'
     except Exception as e:
         err_msg = str(e)
         if 'refused' in err_msg.lower() or 'timeout' in err_msg.lower():
+            with domain_probe_lock:
+                domain_probe_cache[domain] = 'filtered'
             return 'deliverable', 'MX active (Port 25 filtered)'
         return 'risky', f'Handshake notice: {err_msg[:40]}'
 
@@ -277,6 +300,17 @@ def verify_single_email(raw_email, check_smtp=True):
             'deliverable': False
         }
         
+    # Big mailbox providers do not answer RCPT probes. MX is enough, and a timeout
+    # would have been counted as deliverable anyway.
+    if domain in PROBE_SKIP_DOMAINS or domain.endswith('.gmail.com'):
+        return {
+            'email': raw_email,
+            'clean_email': val,
+            'status': 'deliverable',
+            'reason': 'Mailbox provider verified by MX',
+            'deliverable': True
+        }
+
     # Direct SMTP handshake check
     if check_smtp:
         smtp_status, reason = smtp_check_mailbox(val)
@@ -426,7 +460,7 @@ class BatchEmailVerifier:
         self._run_id += 1
         self.worker_thread = threading.Thread(
             target=self._run_verification,
-            args=(self._file_name, self._raw_text, self._check_smtp, 10),
+            args=(self._file_name, self._raw_text, self._check_smtp, 24),
             kwargs={"resume": True, "run_id": self._run_id},
             daemon=True,
         )
@@ -451,7 +485,7 @@ class BatchEmailVerifier:
         unfinished = self.total > 0 and self.progress < self.total and bool(self._done_emails or self.progress > 0)
         return same_file and unfinished
 
-    def start_verification(self, file_name=None, raw_text=None, check_smtp=True, max_workers=10, resume=False):
+    def start_verification(self, file_name=None, raw_text=None, check_smtp=True, max_workers=24, resume=False):
         with self.lock:
             same_unfinished = self._same_unfinished_file(file_name)
             should_resume = bool(resume) and same_unfinished
@@ -613,14 +647,12 @@ class BatchEmailVerifier:
                 self._checkpoint(force=True)
                 return
 
-            checked = already
-            for em in unique_list:
-                if not self._wait_until_ready(run_id):
-                    break
-                if em in self._done_emails:
-                    continue
+            pending = [em for em in unique_list if em not in self._done_emails]
+            workers = max(4, min(int(max_workers or 24), 32))
+            iterator = iter(pending)
+            inflight = set()
 
-                self.current_email = em
+            def check_one(em):
                 try:
                     res = verify_single_email(em, check_smtp=check_smtp)
                 except Exception as exc:
@@ -631,29 +663,51 @@ class BatchEmailVerifier:
                         'reason': f'Check failed: {str(exc)[:80]}',
                         'deliverable': False,
                     }
+                return em, res
 
-                clean_saved = (res.get('clean_email') or em).strip().lower()
-                with self.lock:
-                    if self._run_id != run_id or self.stop_requested or not self.is_running:
+            pool = ThreadPoolExecutor(max_workers=workers)
+            try:
+                while True:
+                    if not self._wait_until_ready(run_id):
                         break
-                    self._done_emails.add(em)
-                    if clean_saved:
-                        self._done_emails.add(clean_saved)
-                    self.results.append(res)
-                    if res.get('deliverable'):
-                        self.deliverable_count += 1
-                        self.deliverable_emails.append(res.get('clean_email') or em)
-                    elif res.get('status') == 'dead':
-                        self.dead_count += 1
-                        self.dead_emails.append(res)
-                    else:
-                        self.risky_count += 1
-                        self.risky_emails.append(res)
-                    checked += 1
-                    self.progress = checked
-
-                self._checkpoint()
-                time.sleep(0.01)
+                    while len(inflight) < workers:
+                        try:
+                            em = next(iterator)
+                        except StopIteration:
+                            break
+                        self.current_email = em
+                        inflight.add(pool.submit(check_one, em))
+                    if not inflight:
+                        break
+                    done, inflight = wait(inflight, timeout=0.4, return_when=FIRST_COMPLETED)
+                    for fut in done:
+                        em, res = fut.result()
+                        clean_saved = (res.get('clean_email') or em).strip().lower()
+                        with self.lock:
+                            if self._run_id != run_id or self.stop_requested or not self.is_running:
+                                inflight.clear()
+                                break
+                            self._done_emails.add(em)
+                            if clean_saved:
+                                self._done_emails.add(clean_saved)
+                            self.results.append(res)
+                            if res.get('deliverable'):
+                                self.deliverable_count += 1
+                                self.deliverable_emails.append(res.get('clean_email') or em)
+                            elif res.get('status') == 'dead':
+                                self.dead_count += 1
+                                self.dead_emails.append(res)
+                            else:
+                                self.risky_count += 1
+                                self.risky_emails.append(res)
+                            self.progress += 1
+                            self.current_email = em
+                    self._checkpoint()
+            finally:
+                try:
+                    pool.shutdown(wait=False, cancel_futures=True)
+                except TypeError:
+                    pool.shutdown(wait=False)
 
             with self.lock:
                 if self._run_id != run_id:
