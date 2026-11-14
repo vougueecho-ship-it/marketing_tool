@@ -778,24 +778,25 @@ class EmailMarketingManager:
             self.sender_name = state.get("sender_name")
             self.preferred_sender_account_id = state.get("preferred_sender_account_id")
 
-        load_file_recipients(self.active_file)
+        # Leads already live in the database. Reading the whole sheet here
+        # blocks the one web worker, so the site never opens.
 
         # Automatic Resume if campaign was actively running when system rebooted / restarted
         if state.get("is_running") and not state.get("is_paused") and (self.current_html or self.current_plain):
             def _auto_resume():
                 time.sleep(3)  # Allow Flask server and DB connections to initialize
-                with self.lock:
-                    if not self.is_running and not self.stop_requested:
-                        log_event(f"🔄 Auto-Resume: Server restart detected. Resuming campaign on '{self.active_file}' from exact checkpoint...", level="INFO")
-                        self.start_campaign(
-                            subject=self.current_subject,
-                            html_body=self.current_html,
-                            plain_body=self.current_plain,
-                            sender_name=self.sender_name,
-                            file_name=self.active_file,
-                            file_queue=self.file_queue,
-                            sender_account_id=self.preferred_sender_account_id
-                        )
+                if self.is_running or self.stop_requested:
+                    return
+                log_event(f"🔄 Auto-Resume: Server restart detected. Resuming campaign on '{self.active_file}' from exact checkpoint...", level="INFO")
+                self.start_campaign(
+                    subject=self.current_subject,
+                    html_body=self.current_html,
+                    plain_body=self.current_plain,
+                    sender_name=self.sender_name,
+                    file_name=self.active_file,
+                    file_queue=self.file_queue,
+                    sender_account_id=self.preferred_sender_account_id
+                )
             threading.Thread(target=_auto_resume, daemon=True).start()
 
     def set_active_file(self, file_name):
@@ -1114,7 +1115,6 @@ class EmailMarketingManager:
 
             if file_name:
                 self.active_file = file_name
-                load_file_recipients(file_name)
 
             self.is_running = True
             self.is_paused = False
