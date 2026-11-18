@@ -142,7 +142,14 @@ def init_db():
             created_at TEXT
         )
     """)
-    
+    cursor.execute("PRAGMA table_info(sender_accounts)")
+    sender_cols = [r["name"] for r in cursor.fetchall()]
+    if "blocked_date" not in sender_cols:
+        try:
+            cursor.execute("ALTER TABLE sender_accounts ADD COLUMN blocked_date TEXT")
+        except Exception:
+            pass
+
     # Check if columns exist in recipients table
     cursor.execute("PRAGMA table_info(recipients)")
     cols = [r["name"] for r in cursor.fetchall()]
@@ -205,9 +212,68 @@ def get_sender_accounts():
         em = acc["sender_email"]
         cursor.execute("SELECT COUNT(*) FROM recipients WHERE sender_email = ? AND status = 'sent' AND sent_at LIKE ?", (em, f"{today_str}%"))
         acc["sent_today"] = cursor.fetchone()[0]
-        acc["remaining_today"] = max(0, acc["daily_limit"] - acc["sent_today"])
+        acc["blocked_today"] = (acc.get("blocked_date") or "") == today_str
+        acc["remaining_today"] = 0 if acc["blocked_today"] else max(0, acc["daily_limit"] - acc["sent_today"])
     conn.close()
     return accounts
+
+def account_can_send(acc):
+    if not acc.get("enabled"):
+        return False
+    if acc.get("blocked_today"):
+        return False
+    return int(acc.get("sent_today") or 0) < int(acc.get("daily_limit") or 0)
+
+def pick_next_sender(accounts, preferred_id):
+    """Selected account goes first. When it cannot send, the next one in the list does."""
+    enabled = [acc for acc in accounts if acc.get("enabled")]
+    if not enabled:
+        return None
+    start = 0
+    preferred = str(preferred_id or "")
+    if preferred and preferred != "auto":
+        for index, acc in enumerate(enabled):
+            if str(acc["id"]) == preferred or acc.get("sender_email") == preferred:
+                start = index
+                break
+    ordered = enabled[start:] + enabled[:start]
+    for acc in ordered:
+        if account_can_send(acc):
+            return acc
+    return None
+
+def sender_stop_reason(err):
+    """Provider limit or a dead mailbox. A bad recipient address is not a reason to switch."""
+    text = str(err or "").lower()
+    if any(mark in text for mark in (
+        "user unknown", "no such user", "mailbox not found", "recipient address rejected",
+        "5.1.1", "5.1.0", "does not exist", "unknown recipient", "invalid recipient",
+    )):
+        return None
+    if any(mark in text for mark in (
+        "suspend", "account disabled", "account locked", "mailbox disabled",
+        "authentication failed", "authentication unsuccessful", "invalid credentials",
+        "username and password not accepted", "badcredentials", "5.7.8", "login failed",
+        "account is not active",
+    )):
+        return "suspended"
+    if any(mark in text for mark in (
+        "quota", "daily limit", "sending limit", "rate limit", "too many messages",
+        "too many emails", "message limit", "5.4.5", "sending quota", "outbound limit",
+        "hourly limit",
+    )):
+        return "quota"
+    return None
+
+def block_sender_today(sender_email):
+    today = time.strftime("%Y-%m-%d")
+    conn = get_db()
+    conn.execute(
+        "UPDATE sender_accounts SET blocked_date = ? WHERE lower(sender_email) = lower(?)",
+        (today, sender_email),
+    )
+    conn.commit()
+    conn.close()
 
 def add_sender_account(data):
     init_db()
@@ -1228,25 +1294,13 @@ class EmailMarketingManager:
                     current_acc = None
                     break
 
-                # Fetch available accounts & find sender with remaining capacity today
+                # Selected account first. Tool limit, provider limit, or a blocked mailbox moves to the next one.
                 accounts = get_sender_accounts()
-                enabled_accs = [a for a in accounts if a.get("enabled")]
-
-                active_acc = None
-                if self.preferred_sender_account_id and str(self.preferred_sender_account_id) != "auto":
-                    for acc in enabled_accs:
-                        if str(acc["id"]) == str(self.preferred_sender_account_id) or acc["sender_email"] == str(self.preferred_sender_account_id):
-                            if acc["sent_today"] < acc["daily_limit"]:
-                                active_acc = acc
-                            break
-
-                if not active_acc:
-                    for acc in enabled_accs:
-                        if acc["sent_today"] < acc["daily_limit"]:
-                            active_acc = acc
-                            if self.preferred_sender_account_id and str(self.preferred_sender_account_id) != "auto":
-                                log_event(f"🔄 Preferred Sender Account daily limit reached! Auto-switching to backup sender: {acc['sender_email']} ({acc['sent_today']}/{acc['daily_limit']} sent today).", level="INFO")
-                            break
+                active_acc = pick_next_sender(accounts, self.preferred_sender_account_id)
+                if active_acc and self.preferred_sender_account_id and str(self.preferred_sender_account_id) not in ("", "auto"):
+                    chosen = str(active_acc["id"]) == str(self.preferred_sender_account_id) or active_acc["sender_email"] == str(self.preferred_sender_account_id)
+                    if not chosen and (current_acc is None or current_acc["sender_email"] != active_acc["sender_email"]):
+                        log_event(f"🔄 Selected sender is finished. Next sender is {active_acc['sender_email']}.", level="INFO")
 
                 if not active_acc:
                     log_event("🛑 INDIVIDUAL DAILY LIMIT REACHED FOR ALL SENDER ACCOUNTS! Campaign automatically paused to protect deliverability. Add accounts or increase limits.", level="WARNING")
@@ -1326,13 +1380,18 @@ class EmailMarketingManager:
                         server = self._create_smtp_connection(current_acc)
                         consecutive_errors = 0
                     except Exception as e:
+                        stop_reason = sender_stop_reason(e)
+                        if stop_reason or consecutive_errors >= 3:
+                            why = "suspended or login failed" if stop_reason == "suspended" else "could not send"
+                            log_event(f"{current_acc['sender_email']} stopped ({why}). Next account starts now. {e}", level="WARNING")
+                            block_sender_today(current_acc["sender_email"])
+                            current_acc = None
+                            server = None
+                            consecutive_errors = 0
+                            continue
                         log_event(f"SMTP Connection failed for {current_acc['sender_email']}: {str(e)}. Retrying in 10s...", level="ERROR")
                         time.sleep(10)
                         consecutive_errors += 1
-                        if consecutive_errors >= 4:
-                            log_event(f"Multiple SMTP failures on {current_acc['sender_email']}. Skipping to next account...", level="WARNING")
-                            current_acc = None
-                            server = None
                         continue
 
                 from_name = current_acc.get("sender_name", "Winning Heaven VIP")
@@ -1419,6 +1478,19 @@ class EmailMarketingManager:
 
                 except Exception as send_err:
                     err_msg = str(send_err)
+                    stop_reason = sender_stop_reason(err_msg)
+                    if stop_reason:
+                        block_sender_today(from_addr)
+                        reason_text = "suspended or login failed" if stop_reason == "suspended" else "provider sending limit"
+                        log_event(f"⛔ {from_addr} stopped ({reason_text}). Next account will send {to_email}. {err_msg}", level="WARNING", recipient=to_email)
+                        try:
+                            if server:
+                                server.quit()
+                        except Exception:
+                            pass
+                        server = None
+                        current_acc = None
+                        continue
                     conn = get_db()
                     c = conn.cursor()
                     c.execute("""

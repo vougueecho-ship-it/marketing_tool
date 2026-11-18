@@ -1643,7 +1643,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     senderAccounts.forEach(acc => {
-      const isFull = acc.sent_today >= acc.daily_limit;
+      const isFull = acc.blocked_today || acc.sent_today >= acc.daily_limit;
       const pct = Math.min(100, Math.round((acc.sent_today / acc.daily_limit) * 100));
       const providerIcon = acc.provider === 'gmail' 
         ? '<i class="fa-brands fa-google" style="color: #ea4335;"></i>' 
@@ -1651,9 +1651,11 @@ document.addEventListener('DOMContentLoaded', () => {
       
       const badgeHtml = !acc.enabled 
         ? '<span class="badge badge-idle" style="background: rgba(255,255,255,0.08); color: #94a3b8;"><i class="fa-solid fa-power-off"></i> Disabled</span>'
-        : (isFull 
-            ? '<span class="badge badge-warning" style="background: rgba(239, 68, 68, 0.15); color: #f87171;"><i class="fa-solid fa-triangle-exclamation"></i> 80 Limit Full</span>'
-            : '<span class="badge badge-running" style="background: rgba(34, 197, 94, 0.15); color: #4ade80;"><i class="fa-solid fa-circle-check"></i> Ready</span>');
+        : (acc.blocked_today
+            ? '<span class="badge badge-warning" style="background: rgba(239, 68, 68, 0.15); color: #f87171;"><i class="fa-solid fa-triangle-exclamation"></i> Stopped today</span>'
+            : (isFull 
+            ? '<span class="badge badge-warning" style="background: rgba(239, 68, 68, 0.15); color: #f87171;"><i class="fa-solid fa-triangle-exclamation"></i> Limit full</span>'
+            : '<span class="badge badge-running" style="background: rgba(34, 197, 94, 0.15); color: #4ade80;"><i class="fa-solid fa-circle-check"></i> Ready</span>'));
 
       const card = document.createElement('div');
       card.className = 'card sender-account-card';
